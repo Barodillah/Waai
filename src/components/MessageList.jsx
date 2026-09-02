@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Lock, Copy, Check, CheckCheck } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function MessageList({ activeSession }) {
   const { isTyping, showToast } = useChat();
@@ -36,6 +38,7 @@ export default function MessageList({ activeSession }) {
         const isUser = msg.sender === 'user';
         return (
           <div
+            id={`msg-${msg.id}`}
             key={msg.id}
             className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} group`}
           >
@@ -54,8 +57,10 @@ export default function MessageList({ activeSession }) {
                 {copiedId === msg.id ? <Check size={12} className="text-[#008069]" /> : <Copy size={12} />}
               </button>
 
-              <div className="whitespace-pre-wrap break-words leading-relaxed font-normal text-[#111b21]">
-                {msg.text}
+              <div className="whitespace-pre-wrap break-words leading-relaxed font-normal text-[#111b21] prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1 prose-pre:bg-gray-800 prose-pre:text-white prose-code:text-[#008069] prose-code:bg-[#f0f2f5] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-a:text-[#53bdeb] prose-strong:font-bold">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {msg.text}
+                </ReactMarkdown>
               </div>
 
               <div className="flex items-center justify-end gap-1 text-[10px] text-[#667781] mt-1 float-right ml-2 -mb-0.5 select-none">

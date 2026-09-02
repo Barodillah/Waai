@@ -13,6 +13,9 @@ export default function MessageInput({ activeSessionId }) {
     if (!inputText.trim() || isTyping) return;
     sendMessage(activeSessionId, inputText);
     setInputText('');
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
   };
 
   return (
@@ -62,13 +65,6 @@ export default function MessageInput({ activeSessionId }) {
       )}
 
       <div className="p-2.5 md:px-4 md:py-3 flex items-center gap-2 shrink-0 bg-[#f0f2f5] border-t border-[#e9edef]">
-        <button
-          type="button"
-          onClick={() => setInputText((prev) => prev + ' 😊')}
-          className="p-2 text-[#54656f] hover:text-[#111b21] hover:bg-[#e9edef] rounded-full transition-colors"
-        >
-          <Smile size={22} />
-        </button>
 
         <button
           type="button"
@@ -79,14 +75,29 @@ export default function MessageInput({ activeSessionId }) {
         </button>
 
         <form onSubmit={handleSendMessage} className="flex-1 flex items-center">
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
+            rows={1}
             placeholder="Ketik pesan AI..."
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 84)}px`;
+            }}
+            onKeyDown={(e) => {
+              const isMobile = window.innerWidth < 768;
+              if (e.key === 'Enter') {
+                if (isMobile) return;
+                if (!e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage(e);
+                }
+              }
+            }}
             disabled={isTyping}
-            className="w-full px-4 py-2.5 rounded-lg text-sm border-none outline-none bg-white text-[#111b21] placeholder-[#54656f] shadow-xs"
+            className="w-full px-4 py-2.5 rounded-lg text-sm border-none outline-none bg-white text-[#111b21] placeholder-[#54656f] shadow-xs resize-none overflow-y-auto scrollbar-thin block"
+            style={{ minHeight: '40px' }}
           />
         </form>
 

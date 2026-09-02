@@ -1,20 +1,21 @@
-import { ArrowLeft, Phone, Video, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Phone, Search, MoreVertical } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
-import { AI_PERSONAS } from '../data/personas';
+import { useNavigate } from 'react-router-dom';
 
 export default function ChatHeader({ activeSession }) {
-  const { setActiveSessionId, showToast, isTyping } = useChat();
+  const navigate = useNavigate();
+  const { setActiveSessionId, showToast, isTyping, setShowContactInfo, showContactInfo, setShowSearchInfo } = useChat();
 
-  const activePersona = AI_PERSONAS.find(p => p.id === activeSession.personaId);
-  const modelName = activePersona ? activePersona.name : 'Asisten AI Aktif';
+  const modelName = activeSession.personaId;
 
   return (
-    <div className="h-16 px-3 md:px-4 bg-[#f0f2f5] border-b border-[#e9edef] flex items-center justify-between shrink-0 z-10">
+    <div className="h-16 px-3 md:px-4 bg-[#f0f2f5] border-b border-[#e9edef] flex items-center justify-between shrink-0 z-10 cursor-pointer" onClick={() => setShowContactInfo(!showContactInfo)}>
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
         <button
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             setActiveSessionId(null);
-            window.history.pushState(null, '', '/');
+            navigate('/');
           }}
           className="md:hidden p-1.5 -ml-1 text-[#54656f] hover:text-[#111b21] rounded-full"
         >
@@ -39,21 +40,25 @@ export default function ChatHeader({ activeSession }) {
 
       <div className="flex items-center gap-1 md:gap-3 text-[#54656f]">
         <button
-          onClick={() => showToast('Fitur panggilan suara AI segera hadir')}
+          onClick={(e) => { e.stopPropagation(); showToast('Fitur panggilan suara AI segera hadir'); }}
           className="p-2 hover:bg-[#e9edef] rounded-full transition-colors"
           title="Panggilan Suara"
         >
           <Phone size={19} />
         </button>
         <button
-          onClick={() => showToast('Fitur panggilan video AI segera hadir')}
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            setShowSearchInfo(true);
+            setShowContactInfo(false);
+          }}
           className="p-2 hover:bg-[#e9edef] rounded-full transition-colors"
-          title="Panggilan Video"
+          title="Cari Pesan"
         >
-          <Video size={19} />
+          <Search size={19} />
         </button>
         <button
-          onClick={() => showToast(`Model: ${modelName}`)}
+          onClick={(e) => { e.stopPropagation(); showToast(`Model: ${modelName}`); }}
           className="p-2 hover:bg-[#e9edef] rounded-full transition-colors"
           title="Info Asisten"
         >

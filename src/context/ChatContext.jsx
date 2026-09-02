@@ -1,7 +1,7 @@
 import { createContext, useState, useContext } from 'react';
 import { AI_PERSONAS } from '../data/personas';
 import { getCurrentTime } from '../utils/time';
-import { callGeminiAPI } from '../utils/api';
+import { callGeminiAPI, callOpenRouterAPI } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 
 const ChatContext = createContext();
@@ -9,61 +9,23 @@ const ChatContext = createContext();
 export const ChatProvider = ({ children }) => {
   const navigate = useNavigate();
 
-  const [sessions, setSessions] = useState([
-    {
-      id: 'session-1',
-      personaId: 'openai',
-      name: 'Jadwal Belajar',
-      avatar: `https://robohash.org/Jadwal%20Belajar?set=set1`,
-      unreadCount: 0,
-      lastUpdated: '10:45',
-      messages: [
-        {
-          id: 'm1',
-          sender: 'ai',
-          text: 'Halo! Saya asisten AI WhatsApp kamu. Ada yang bisa saya bantu hari ini? 🚀',
-          time: '10:42',
-          status: 'read'
-        },
-        {
-          id: 'm2',
-          sender: 'user',
-          text: 'Bisa bantu saya membuat jadwal belajar produktif untuk minggu ini?',
-          time: '10:44',
-          status: 'read'
-        },
-        {
-          id: 'm3',
-          sender: 'ai',
-          text: 'Tentu! Berikut rekomendasi jadwal belajar efektif dengan metode Pomodoro:\n\n1. **Pagi (08:00 - 10:00)**: Materi Konsep & Teori Berat\n2. **Siang (13:00 - 15:00)**: Latihan Soal / Praktik Langsung\n3. **Malam (19:30 - 20:30)**: Review kilat & rangkuman\n\nAda topik atau target khusus yang ingin kamu prioritaskan?',
-          time: '10:45',
-          status: 'read'
-        }
-      ]
-    },
-    {
-      id: 'session-2',
-      personaId: 'anthropic',
-      name: 'Tanya Koding',
-      avatar: `https://robohash.org/Tanya%20Koding?set=set1`,
-      unreadCount: 0,
-      lastUpdated: '09:15',
-      messages: [
-        {
-          id: 'm2-1',
-          sender: 'ai',
-          text: 'Siap membantu ngoding! Kirim cuplikan error, algoritma, atau minta rekomendasi arsitektur.',
-          time: '09:15',
-          status: 'read'
-        }
-      ]
-    }
-  ]);
+  const [sessions, setSessions] = useState([]);
 
   const [activeSessionId, setActiveSessionId] = useState(null);
-  const [activeMobileTab, setActiveMobileTab] = useState('chats'); // 'chats' | 'new_chat'
+  const [activeMobileTab, setActiveMobileTab] = useState('chats'); // 'chats' | 'new_chat' | 'apikey'
   const [toastMessage, setToastMessage] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [showContactInfo, setShowContactInfo] = useState(false);
+  const [showSearchInfo, setShowSearchInfo] = useState(false);
+  
+  const [activeProfileFeature, setActiveProfileFeature] = useState('default');
+  const [openRouterApiKey, setOpenRouterApiKey] = useState(() => localStorage.getItem('openRouterApiKey') || '');
+
+  const saveApiKey = (key) => {
+    setOpenRouterApiKey(key);
+    localStorage.setItem('openRouterApiKey', key);
+    showToast('API Key OpenRouter berhasil disimpan');
+  };
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -71,6 +33,12 @@ export const ChatProvider = ({ children }) => {
   };
 
   const startNewChat = (persona) => {
+    // Check if it's an OpenRouter model (has a slash in the ID like 'anthropic/claude-...')
+    if (persona.id && persona.id.includes('/') && !openRouterApiKey) {
+      showToast('Mohon isi OpenRouter API Key di Pengaturan terlebih dahulu');
+      return;
+    }
+
     const existing = sessions.find((s) => s.personaId === persona.id);
     if (existing) {
       setActiveSessionId(existing.id);
@@ -108,13 +76,55 @@ export const ChatProvider = ({ children }) => {
   };
 
   const deleteSession = (e, sessionId) => {
-    e.stopPropagation();
+    e?.stopPropagation();
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     if (activeSessionId === sessionId) {
       setActiveSessionId(null);
       navigate('/');
     }
     showToast('Sesi obrolan berhasil dihapus');
+  };
+
+  const deleteMultipleSessions = (sessionIds) => {
+    setSessions((prev) => prev.filter((s) => !sessionIds.includes(s.id)));
+    if (sessionIds.includes(activeSessionId)) {
+      setActiveSessionId(null);
+      navigate('/');
+    }
+    showToast(`${sessionIds.length} obrolan berhasil dihapus`);
+  };
+
+  const generateSessionTitle = async (sessionId, firstMessageText, personaId) => {
+    try {
+      const prompt = `Buatkan judul singkat (maksimal 2-3 kata) untuk sesi chat yang diawali dengan pesan ini: "${firstMessageText}". Jangan berikan tanda kutip atau kata tambahan lainnya. Cukup kembalikan teks judulnya saja.`;
+      const titleMessage = [{ sender: 'user', text: prompt }];
+      
+      let newTitle = "";
+      if (personaId.includes('/') && openRouterApiKey) {
+        // Call OpenRouter with the current model to generate title
+        newTitle = await callOpenRouterAPI(titleMessage, personaId, openRouterApiKey);
+      } else {
+        // Fallback to Gemini API
+        const titlePersona = { systemPrompt: "Kamu adalah asisten pembuat judul." };
+        newTitle = await callGeminiAPI(titleMessage, titlePersona);
+      }
+
+      if (newTitle) {
+        const cleanTitle = newTitle.replace(/["']/g, '').trim();
+        setSessions(prev => prev.map(s => {
+          if (s.id === sessionId) {
+            return {
+              ...s,
+              name: cleanTitle,
+              avatar: `https://robohash.org/${encodeURIComponent(cleanTitle)}?set=set1`
+            };
+          }
+          return s;
+        }));
+      }
+    } catch (e) {
+      console.error('Failed to generate title', e);
+    }
   };
 
   const sendMessage = async (sessionId, text) => {
@@ -144,30 +154,51 @@ export const ChatProvider = ({ children }) => {
 
     setIsTyping(true);
 
-    const persona = AI_PERSONAS.find((p) => p.id === session.personaId) || AI_PERSONAS[0];
+    if (updatedMessages.length === 2) {
+      // Generate title asinkron
+      generateSessionTitle(sessionId, text, session.personaId);
+    }
 
     try {
-      const aiReplyText = await callGeminiAPI(updatedMessages, persona);
-      const aiReplyTime = getCurrentTime();
-      const aiMessage = {
-        id: 'ai-' + Date.now(),
-        sender: 'ai',
-        text: aiReplyText,
-        time: aiReplyTime,
-        status: 'read'
-      };
+      let aiReplyText = "";
+      
+      if (session.personaId.includes('/')) {
+        // Model dari OpenRouter
+        aiReplyText = await callOpenRouterAPI(updatedMessages, session.personaId, openRouterApiKey);
+      } else {
+        // Model / Persona bawaan lokal (Gemini)
+        const persona = AI_PERSONAS.find((p) => p.id === session.personaId) || AI_PERSONAS[0];
+        aiReplyText = await callGeminiAPI(updatedMessages, persona);
+      }
 
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === sessionId
-            ? {
-                ...s,
-                messages: [...s.messages, aiMessage],
-                lastUpdated: aiReplyTime
-              }
-            : s
-        )
-      );
+      const replies = aiReplyText.split('|||').map(t => t.trim()).filter(Boolean);
+
+      for (let i = 0; i < replies.length; i++) {
+        const textChunk = replies[i];
+        const aiMessage = {
+          id: 'ai-' + Date.now() + '-' + i,
+          sender: 'ai',
+          text: textChunk,
+          time: getCurrentTime(),
+          status: 'read'
+        };
+
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === sessionId
+              ? {
+                  ...s,
+                  messages: [...s.messages, aiMessage],
+                  lastUpdated: getCurrentTime()
+                }
+              : s
+          )
+        );
+
+        if (i < replies.length - 1) {
+          await new Promise(res => setTimeout(res, 800));
+        }
+      }
     } catch (error) {
       const errorMsg = {
         id: 'err-' + Date.now(),
@@ -196,8 +227,17 @@ export const ChatProvider = ({ children }) => {
         showToast,
         startNewChat,
         deleteSession,
+        deleteMultipleSessions,
         sendMessage,
-        isTyping
+        isTyping,
+        showContactInfo,
+        setShowContactInfo,
+        showSearchInfo,
+        setShowSearchInfo,
+        activeProfileFeature,
+        setActiveProfileFeature,
+        openRouterApiKey,
+        saveApiKey
       }}
     >
       {children}
