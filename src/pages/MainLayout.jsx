@@ -7,6 +7,7 @@ import ContactInfo from '../components/ContactInfo';
 import MessageSearch from '../components/MessageSearch';
 import ProfileFeatureView from '../components/ProfileFeatureView';
 import ApiKeyView from '../components/ApiKeyView';
+import NewPersonaView from '../components/NewPersonaView';
 
 export default function MainLayout() {
   const { toastMessage, activeSessionId, showContactInfo, showSearchInfo, sessions, activeMobileTab, setActiveMobileTab, activeProfileFeature } = useChat();
@@ -53,10 +54,16 @@ export default function MainLayout() {
         {/* Panel Kanan (Profile Feature View, Outlet merender EmptyChat atau ActiveChat) */}
         <div
           className={`flex-1 h-full flex flex-col relative bg-[#efeae2] ${
-            (activeSessionId && activeMobileTab !== 'profile') ? 'flex w-full' : 'hidden md:flex'
+            ((activeSessionId && activeMobileTab === 'chats') || activeProfileFeature === 'new_persona') 
+              ? 'flex w-full' 
+              : 'hidden md:flex'
           }`}
         >
-          {activeMobileTab === 'profile' ? (
+          {activeProfileFeature === 'new_persona' ? (
+            <div className="w-full h-full">
+              <NewPersonaView />
+            </div>
+          ) : activeMobileTab === 'profile' ? (
             <div className="w-full h-full">
                {activeProfileFeature === 'apikey' ? (
                  <ApiKeyView isMobile={false} />

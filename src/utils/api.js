@@ -43,11 +43,14 @@ export const callGeminiAPI = async (chatMessages, persona) => {
   }
 };
 
-export const callOpenRouterAPI = async (chatMessages, modelId, apiKey) => {
+export const callOpenRouterAPI = async (chatMessages, modelId, apiKey, customSystemPrompt = null) => {
   const endpoint = "https://openrouter.ai/api/v1/chat/completions";
 
+  const defaultSystemPrompt = "PENTING: Berikan jawaban singkat bergaya pesan chat santai (WhatsApp). Jika jawaban butuh penjelasan panjang, bagi menjadi beberapa pesan pendek yang dipisahkan persis dengan teks '|||'.";
+  const sysPromptContent = customSystemPrompt ? `${customSystemPrompt}\n\n${defaultSystemPrompt}` : defaultSystemPrompt;
+
   const messages = [
-    { role: 'system', content: "PENTING: Berikan jawaban singkat bergaya pesan chat santai (WhatsApp). Jika jawaban butuh penjelasan panjang, bagi menjadi beberapa pesan pendek yang dipisahkan persis dengan teks '|||'." },
+    { role: 'system', content: sysPromptContent },
     ...chatMessages.map((m) => ({
       role: m.sender === 'user' ? 'user' : 'assistant',
       content: m.text

@@ -21,6 +21,35 @@ export const ChatProvider = ({ children }) => {
   const [activeProfileFeature, setActiveProfileFeature] = useState('default');
   const [openRouterApiKey, setOpenRouterApiKey] = useState(() => localStorage.getItem('openRouterApiKey') || '');
 
+  const [customPersonas, setCustomPersonas] = useState(() => {
+    const saved = localStorage.getItem('customPersonas');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [editingPersona, setEditingPersona] = useState(null);
+
+  const deleteCustomPersona = (id) => {
+    const newPersonas = customPersonas.filter(p => p.id !== id);
+    setCustomPersonas(newPersonas);
+    localStorage.setItem('customPersonas', JSON.stringify(newPersonas));
+    showToast('Persona berhasil dihapus');
+  };
+
+  const updateCustomPersona = (updatedPersona) => {
+    const newPersonas = customPersonas.map(p => p.id === updatedPersona.id ? updatedPersona : p);
+    setCustomPersonas(newPersonas);
+    localStorage.setItem('customPersonas', JSON.stringify(newPersonas));
+    showToast('Persona berhasil diperbarui');
+  };
+
+  const addCustomPersona = (persona) => {
+    const newPersonas = [persona, ...customPersonas];
+    setCustomPersonas(newPersonas);
+    localStorage.setItem('customPersonas', JSON.stringify(newPersonas));
+    showToast('Persona berhasil ditambahkan');
+    startNewChat(persona);
+  };
+
   const saveApiKey = (key) => {
     setOpenRouterApiKey(key);
     localStorage.setItem('openRouterApiKey', key);
@@ -49,12 +78,17 @@ export const ChatProvider = ({ children }) => {
 
     const currentTime = getCurrentTime();
     const newSessionId = 'session-' + Date.now();
-    const sessionName = `Sesi ${persona.name.split(' ')[0]}`;
+    const isModel = persona.id && persona.id.includes('/');
+    const sessionName = isModel ? `Sesi ${persona.name.split(' ')[0]}` : persona.name;
+    const sessionAvatar = isModel 
+      ? `https://robohash.org/${encodeURIComponent(sessionName)}?set=set1` 
+      : (persona.avatar || `https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(sessionName)}`);
+
     const newSession = {
       id: newSessionId,
       personaId: persona.id,
       name: sessionName,
-      avatar: `https://robohash.org/${encodeURIComponent(sessionName)}?set=set1`,
+      avatar: sessionAvatar,
       unreadCount: 0,
       lastUpdated: currentTime,
       messages: [
@@ -100,7 +134,15 @@ export const ChatProvider = ({ children }) => {
       const titleMessage = [{ sender: 'user', text: prompt }];
       
       let newTitle = "";
-      if (personaId.includes('/') && openRouterApiKey) {
+      if (personaId.startsWith('custom-')) {
+        const customPersona = customPersonas.find(p => p.id === personaId);
+        if (customPersona && customPersona.baseModel && openRouterApiKey) {
+          newTitle = await callOpenRouterAPI(titleMessage, customPersona.baseModel, openRouterApiKey, "Kamu adalah asisten pembuat judul.");
+        } else {
+          const titlePersona = { systemPrompt: "Kamu adalah asisten pembuat judul." };
+          newTitle = await callGeminiAPI(titleMessage, titlePersona);
+        }
+      } else if (personaId.includes('/') && openRouterApiKey) {
         // Call OpenRouter with the current model to generate title
         newTitle = await callOpenRouterAPI(titleMessage, personaId, openRouterApiKey);
       } else {
@@ -155,14 +197,26 @@ export const ChatProvider = ({ children }) => {
     setIsTyping(true);
 
     if (updatedMessages.length === 2) {
-      // Generate title asinkron
-      generateSessionTitle(sessionId, text, session.personaId);
+      // Generate title asinkron (Hanya untuk model AI)
+      const isModel = session.personaId && session.personaId.includes('/');
+      if (isModel) {
+        generateSessionTitle(sessionId, text, session.personaId);
+      }
     }
 
     try {
       let aiReplyText = "";
       
-      if (session.personaId.includes('/')) {
+      if (session.personaId.startsWith('custom-')) {
+        const customPersona = customPersonas.find(p => p.id === session.personaId);
+        if (customPersona && customPersona.baseModel && openRouterApiKey) {
+          aiReplyText = await callOpenRouterAPI(updatedMessages, customPersona.baseModel, openRouterApiKey, customPersona.systemPrompt);
+        } else if (customPersona) {
+          aiReplyText = await callGeminiAPI(updatedMessages, customPersona);
+        } else {
+          aiReplyText = "Persona tidak ditemukan.";
+        }
+      } else if (session.personaId.includes('/')) {
         // Model dari OpenRouter
         aiReplyText = await callOpenRouterAPI(updatedMessages, session.personaId, openRouterApiKey);
       } else {
@@ -237,7 +291,13 @@ export const ChatProvider = ({ children }) => {
         activeProfileFeature,
         setActiveProfileFeature,
         openRouterApiKey,
-        saveApiKey
+        saveApiKey,
+        customPersonas,
+        addCustomPersona,
+        deleteCustomPersona,
+        updateCustomPersona,
+        editingPersona,
+        setEditingPersona
       }}
     >
       {children}

@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Lock, Copy, Check, CheckCheck } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
+import { AI_PERSONAS } from '../data/personas';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 export default function MessageList({ activeSession }) {
-  const { isTyping, showToast } = useChat();
+  const { isTyping, showToast, customPersonas } = useChat();
   const messagesEndRef = useRef(null);
   const [copiedId, setCopiedId] = useState(null);
+
+  const persona = customPersonas?.find(p => p.id === activeSession.personaId) || AI_PERSONAS.find(p => p.id === activeSession.personaId);
+  const modelId = persona ? (persona.baseModel || persona.id) : activeSession.personaId;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,7 +34,7 @@ export default function MessageList({ activeSession }) {
       <div className="flex justify-center my-2">
         <div className="text-[11px] px-3 py-1.5 rounded-lg max-w-sm text-center shadow-xs flex items-center gap-1.5 bg-[#ffeecd] text-[#54656f] border border-[#ffdf9e]/50">
           <Lock size={12} className="shrink-0 text-[#856404]" />
-          <span>Pesan diproses langsung secara cerdas oleh Google Gemini AI.</span>
+          <span>Pesan diproses langsung oleh <strong>{modelId}</strong>.</span>
         </div>
       </div>
 
@@ -43,11 +47,10 @@ export default function MessageList({ activeSession }) {
             className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} group`}
           >
             <div
-              className={`relative max-w-[85%] md:max-w-[70%] lg:max-w-[60%] rounded-lg px-3 py-2 text-sm shadow-xs transition-all ${
-                isUser
+              className={`relative max-w-[85%] md:max-w-[70%] lg:max-w-[60%] rounded-lg px-3 py-2 text-sm shadow-xs transition-all ${isUser
                   ? 'bg-[#d9fdd3] text-[#111b21] rounded-tr-none'
                   : 'bg-[#ffffff] text-[#111b21] rounded-tl-none border border-[#e9edef]/60'
-              }`}
+                }`}
             >
               <button
                 onClick={() => handleCopyText(msg.text, msg.id)}
