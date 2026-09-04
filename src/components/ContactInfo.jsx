@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { X, Search, ChevronRight, Bell, Clock, Ban, ThumbsDown, Trash2, Bot } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
-import { AI_PERSONAS } from '../data/personas';
+import ModelSearchModal from './ModelSearchModal';
+import ConfirmModal from './ConfirmModal';
 
 export default function ContactInfo() {
-  const { setShowContactInfo, sessions, activeSessionId, deleteSession, customPersonas } = useChat();
+  const { setShowContactInfo, sessions, activeSessionId, deleteSession, customPersonas, updateSessionPersonaId } = useChat();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isModelModalOpen, setIsModelModalOpen] = useState(false);
   const [modelDescription, setModelDescription] = useState('');
   const [modelIconUrl, setModelIconUrl] = useState(null);
   const [isLoadingDescription, setIsLoadingDescription] = useState(false);
@@ -20,7 +22,7 @@ export default function ContactInfo() {
 
     if (!isModel) {
       // It's a persona (custom or predefined)
-      const persona = customPersonas.find(p => p.id === activeSession.personaId) || AI_PERSONAS.find(p => p.id === activeSession.personaId);
+      const persona = customPersonas.find(p => p.id === activeSession.personaId);
       if (persona) {
         setModelDescription(persona.systemPrompt || 'Tidak ada prompt khusus.');
         targetModelId = persona.baseModel; // Gunakan base model untuk fetch icon
@@ -41,7 +43,7 @@ export default function ContactInfo() {
         const res = await fetch(`https://openrouter.ai/api/frontend/v1/models/find?q=${encodeURIComponent(targetModelId)}`);
         const data = await res.json();
         const modelData = data?.data?.models?.[0];
-        
+
         if (modelData) {
           // Hanya timpa deskripsi jika ini BUKAN persona khusus (artinya ini model murni)
           if (isModel) {
@@ -50,7 +52,7 @@ export default function ContactInfo() {
 
           const modelName = modelData.name.toLowerCase();
           let iconUrl = null;
-          
+
           if (modelName.includes('gemini')) iconUrl = 'https://openrouter.ai/images/icons/GoogleGemini.svg';
           else if (modelName.includes('deepseek')) iconUrl = 'https://openrouter.ai/images/icons/DeepSeek.png';
           else if (modelName.includes('openai')) iconUrl = 'https://openrouter.ai/images/icons/OpenAI.svg';
@@ -60,8 +62,8 @@ export default function ContactInfo() {
           else if (modelName.includes('minimax')) iconUrl = 'https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://minimaxi.com/&size=256';
           else if (modelName.includes('qwen')) iconUrl = 'https://openrouter.ai/images/icons/Qwen.png';
           else if (modelData.endpoint?.provider_info?.icon?.url) {
-            iconUrl = modelData.endpoint.provider_info.icon.url.startsWith('/') 
-              ? `https://openrouter.ai${modelData.endpoint.provider_info.icon.url}` 
+            iconUrl = modelData.endpoint.provider_info.icon.url.startsWith('/')
+              ? `https://openrouter.ai${modelData.endpoint.provider_info.icon.url}`
               : modelData.endpoint.provider_info.icon.url;
           }
           setModelIconUrl(iconUrl);
@@ -87,6 +89,50 @@ export default function ContactInfo() {
     setShowContactInfo(false);
   };
 
+  // Menghitung rata-rata waktu respon AI (dalam detik)
+  const calculateAvgResponseTime = () => {
+    if (!activeSession || !activeSession.messages || activeSession.messages.length < 2) return null;
+    
+    let totalResponseTimeMs = 0;
+    let responseCount = 0;
+    const messages = activeSession.messages;
+
+    const extractTimestamp = (id) => {
+      if (!id) return null;
+      const match = id.match(/\d{13}/);
+      return match ? parseInt(match[0], 10) : null;
+    };
+
+    for (let i = 0; i < messages.length - 1; i++) {
+      const msg = messages[i];
+      if (msg.sender === 'user') {
+        // Cari pesan AI pertama setelah pesan user ini
+        let nextAiMsg = null;
+        for (let j = i + 1; j < messages.length; j++) {
+          if (messages[j].sender === 'ai') {
+            nextAiMsg = messages[j];
+            break;
+          }
+        }
+        
+        if (nextAiMsg) {
+          const userTime = extractTimestamp(msg.id);
+          const aiTime = extractTimestamp(nextAiMsg.id);
+          if (userTime && aiTime && aiTime >= userTime) {
+            totalResponseTimeMs += (aiTime - userTime);
+            responseCount++;
+          }
+        }
+      }
+    }
+
+    if (responseCount === 0) return null;
+    const avgSec = totalResponseTimeMs / responseCount / 1000;
+    return avgSec < 0.1 ? "< 0.1s" : avgSec.toFixed(1) + "s";
+  };
+
+  const avgResponseTime = calculateAvgResponseTime();
+
   return (
     <div className="absolute md:relative right-0 top-0 h-full w-full md:w-[400px] bg-white shadow-xl md:shadow-none z-30 md:z-auto flex flex-col animate-slide-in-right border-l border-[#e9edef] shrink-0">
       {/* Header */}
@@ -106,26 +152,32 @@ export default function ContactInfo() {
             className="w-48 h-48 rounded-full object-cover mb-4"
           />
           <h2 className="text-2xl font-normal text-[#111b21]">{activeSession.name}</h2>
-          <div className="flex items-center gap-1.5 mt-1">
-            <div className="relative shrink-0 w-4 h-4 flex items-center justify-center rounded-[3px] bg-[#f0f2f5] overflow-hidden">
-              {modelIconUrl ? (
-                <img
-                  src={modelIconUrl}
-                  alt="model icon"
-                  className="w-full h-full object-contain"
-                />
-              ) : (
-                <Bot size={12} className="text-[#54656f]" />
-              )}
+          {!activeSession.isGroup && (
+            <div 
+              className="flex items-center gap-1.5 mt-1 cursor-pointer hover:bg-[#f0f2f5] px-2 py-1 rounded-md transition-colors"
+              onClick={() => setIsModelModalOpen(true)}
+              title="Ubah Model"
+            >
+              <div className="relative shrink-0 w-4 h-4 flex items-center justify-center rounded-[3px] bg-white overflow-hidden">
+                {modelIconUrl ? (
+                  <img
+                    src={modelIconUrl}
+                    alt="model icon"
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <Bot size={12} className="text-[#54656f]" />
+                )}
+              </div>
+              <p className="text-sm text-[#008069] hover:underline font-medium">
+                {
+                  activeSession.personaId?.includes('/')
+                    ? activeSession.personaId
+                    : (customPersonas.find(p => p.id === activeSession.personaId)?.baseModel || activeSession.personaId)
+                }
+              </p>
             </div>
-            <p className="text-sm text-[#54656f]">
-              {
-                activeSession.personaId.includes('/') 
-                  ? activeSession.personaId 
-                  : ((customPersonas.find(p => p.id === activeSession.personaId) || AI_PERSONAS.find(p => p.id === activeSession.personaId))?.baseModel || activeSession.personaId)
-              }
-            </p>
-          </div>
+          )}
         </div>
 
         {/* Tentang */}
@@ -133,6 +185,10 @@ export default function ContactInfo() {
           <p className="text-sm text-[#54656f] mb-1">Tentang</p>
           <p className="text-sm text-[#111b21]">
             {isLoadingDescription ? 'Memuat deskripsi...' : (modelDescription || 'Tidak ada deskripsi.')}
+          </p>
+          <p className="text-sm text-[#54656f] mb-1 mt-3">Waktu Respon (Rata-rata)</p>
+          <p className="text-sm text-[#111b21]">
+            {avgResponseTime || 'Belum ada data'}
           </p>
         </div>
 
@@ -196,7 +252,7 @@ export default function ContactInfo() {
             <ThumbsDown size={20} />
             <span className="text-sm">Laporkan {activeSession.name}</span>
           </button>
-          <button 
+          <button
             onClick={() => setShowDeleteModal(true)}
             className="px-6 py-4 flex items-center gap-4 text-[#ea0038] border-t border-[#f0f2f5] hover:bg-[#f5f6f6] transition-colors text-left"
           >
@@ -208,29 +264,24 @@ export default function ContactInfo() {
       </div>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/80">
-          <div className="bg-white rounded shadow-[0_17px_50px_0_rgba(11,20,26,.19),0_12px_15px_0_rgba(11,20,26,.24)] w-[90%] max-w-[400px] p-5 animate-fade-in text-[#3b4a54]">
-            <div className="text-[15px] leading-relaxed mb-10">
-              Hapus chat dengan "{activeSession.name}"?
-            </div>
-            <div className="flex justify-end gap-2 font-medium">
-              <button 
-                onClick={() => setShowDeleteModal(false)}
-                className="px-6 py-2.5 text-[#008069] border border-[#e9edef] rounded-full hover:bg-[#f5f6f6] transition-colors text-sm"
-              >
-                Batal
-              </button>
-              <button 
-                onClick={handleDelete}
-                className="px-6 py-2.5 bg-[#008069] text-white rounded-full hover:bg-[#06cf9c] transition-colors shadow-sm text-sm"
-              >
-                Hapus chat
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        message={`Hapus chat dengan "${activeSession.name}"?`}
+        confirmText="Hapus chat"
+        cancelText="Batal"
+        isDanger={true}
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteModal(false)}
+      />
+
+      <ModelSearchModal
+        isOpen={isModelModalOpen}
+        onClose={() => setIsModelModalOpen(false)}
+        onSelect={(model, iconUrl) => {
+          updateSessionPersonaId(activeSessionId, model.slug || model.id);
+          setIsModelModalOpen(false);
+        }}
+      />
     </div>
   );
 }

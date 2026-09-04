@@ -10,12 +10,18 @@ import {
   Bot,
   Wand2,
   LogOut,
-  Archive
+  Archive,
+  Pencil,
+  Check,
+  X
 } from 'lucide-react';
+import { useState } from 'react';
 import { useChat } from '../context/ChatContext';
 
 export default function ProfileSettings() {
-  const { setActiveMobileTab, setActiveProfileFeature } = useChat();
+  const { setActiveMobileTab, setActiveProfileFeature, userName, saveUserName } = useChat();
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState('');
 
   const handleApiKeyClick = () => {
     if (window.innerWidth < 768) {
@@ -46,9 +52,49 @@ export default function ProfileSettings() {
           </div>
 
           {/* Name & Username */}
-          <h2 className="mt-4 text-2xl font-normal text-[#111b21] flex items-center gap-1">
-            Barod
-          </h2>
+          <div className="mt-4 flex items-center justify-center">
+            {isEditingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={tempName}
+                  onChange={(e) => setTempName(e.target.value)}
+                  className="text-2xl font-normal text-[#111b21] bg-transparent border-b border-[#00a884] focus:outline-none w-40 text-center"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      saveUserName(tempName);
+                      setIsEditingName(false);
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    saveUserName(tempName);
+                    setIsEditingName(false);
+                  }}
+                  className="p-1 text-[#00a884] hover:bg-gray-100 rounded-full"
+                >
+                  <Check size={20} />
+                </button>
+                <button
+                  onClick={() => setIsEditingName(false)}
+                  className="p-1 text-[#54656f] hover:bg-gray-100 rounded-full"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            ) : (
+              <h2 className="text-2xl font-normal text-[#111b21] flex items-center gap-2 group cursor-pointer"
+                  onClick={() => {
+                    setTempName(userName);
+                    setIsEditingName(true);
+                  }}>
+                {userName}
+                <Pencil size={18} className="text-[#54656f] opacity-0 group-hover:opacity-100 transition-opacity" />
+              </h2>
+            )}
+          </div>
           <p className="text-[#54656f] mt-1">jerukbalimu@email.com</p>
         </div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Check, CircleDashed, ChevronDown, Search, Bot } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { callOpenRouterAPI } from '../utils/api';
+import ModelSearchModal from './ModelSearchModal';
 
 export default function NewPersonaView() {
   const { setActiveProfileFeature, setActiveMobileTab, addCustomPersona, updateCustomPersona, editingPersona, setEditingPersona, openRouterApiKey, showToast } = useChat();
@@ -13,19 +14,21 @@ export default function NewPersonaView() {
   const [type, setType] = useState('afirmasi'); // afirmasi, debat, devil
   const [baseModel, setBaseModel] = useState('');
   
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [modelSearchQuery, setModelSearchQuery] = useState('');
-  const [defaultModels, setDefaultModels] = useState([]);
-  const dropdownRef = useRef(null);
+  const [isModelModalOpen, setIsModelModalOpen] = useState(false);
+  const [selectedModelData, setSelectedModelData] = useState(null);
+  const [selectedModelIconUrl, setSelectedModelIconUrl] = useState(null);
 
   useEffect(() => {
     if (editingPersona) {
       setName(editingPersona.name);
-      setBaseModel(editingPersona.baseModel || '');
-      
-      // Mengembalikan field interest dan tone (dengan fallback untuk kompatibilitas data lama)
       setInterest(editingPersona.interest || '');
       setTone(editingPersona.tone || '');
+      setType(editingPersona.characterType || 'afirmasi');
+      
+      if (editingPersona.baseModel) {
+        setBaseModel(editingPersona.baseModel);
+        setSelectedModelData({ name: editingPersona.baseModel.split('/').pop() || editingPersona.baseModel });
+      }
       
       if (!editingPersona.interest && editingPersona.description) {
         try {
@@ -36,93 +39,8 @@ export default function NewPersonaView() {
           }
         } catch (e) {}
       }
-
-      if (editingPersona.systemPrompt.includes('selalu mendukung')) setType('afirmasi');
-      else if (editingPersona.systemPrompt.includes('suka berdebat')) setType('debat');
-      else if (editingPersona.systemPrompt.includes('selalu mengambil sudut pandang berlawanan')) setType('devil');
     }
   }, [editingPersona]);
-  const [openRouterModels, setOpenRouterModels] = useState([]);
-  const [isLoadingModels, setIsLoadingModels] = useState(false);
-
-  useEffect(() => {
-    const fetchModels = async () => {
-      setIsLoadingModels(true);
-      try {
-        const response = await fetch('https://openrouter.ai/api/frontend/v1/models/find?active=true&order=most-popular&output_modalities=text');
-        const data = await response.json();
-        const models = data.data.models.slice(0, 20);
-        setOpenRouterModels(models);
-        setDefaultModels(models);
-        if (models.length > 0 && !baseModel) {
-          setBaseModel(models[0].slug || models[0].id);
-        }
-      } catch (error) {
-        console.error('Failed to fetch OpenRouter models:', error);
-      } finally {
-        setIsLoadingModels(false);
-      }
-    };
-    fetchModels();
-  }, []);
-
-  useEffect(() => {
-    const searchModels = async () => {
-      if (modelSearchQuery.length >= 3) {
-        setIsLoadingModels(true);
-        try {
-          const response = await fetch(`https://openrouter.ai/api/frontend/v1/models/find?active=true&output_modalities=text&q=${encodeURIComponent(modelSearchQuery)}`);
-          const data = await response.json();
-          setOpenRouterModels(data.data.models.slice(0, 20));
-        } catch (error) {
-          console.error('Failed to search models:', error);
-        } finally {
-          setIsLoadingModels(false);
-        }
-      } else if (modelSearchQuery.length === 0) {
-        setOpenRouterModels(defaultModels);
-      }
-    };
-
-    const timeoutId = setTimeout(() => {
-      searchModels();
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [modelSearchQuery, defaultModels]);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const getModelIcon = (modelName, modelEndpointIconUrl) => {
-    if (!modelName) return null;
-    const lowerName = modelName.toLowerCase();
-    let iconUrl = null;
-    if (lowerName.includes('gemini')) iconUrl = 'https://openrouter.ai/images/icons/GoogleGemini.svg';
-    else if (lowerName.includes('deepseek')) iconUrl = 'https://openrouter.ai/images/icons/DeepSeek.png';
-    else if (lowerName.includes('openai')) iconUrl = 'https://openrouter.ai/images/icons/OpenAI.svg';
-    else if (lowerName.includes('z.ai')) iconUrl = 'https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://z.ai/&size=256';
-    else if (lowerName.includes('xiaomi')) iconUrl = 'https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://www.mi.com&size=256';
-    else if (lowerName.includes('tencent')) iconUrl = 'https://openrouter.ai/images/icons/Tencent.png';
-    else if (lowerName.includes('minimax')) iconUrl = 'https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://minimaxi.com/&size=256';
-    else if (lowerName.includes('qwen')) iconUrl = 'https://openrouter.ai/images/icons/Qwen.png';
-    else if (modelEndpointIconUrl) {
-      iconUrl = modelEndpointIconUrl.startsWith('/') 
-        ? `https://openrouter.ai${modelEndpointIconUrl}` 
-        : modelEndpointIconUrl;
-    }
-    return iconUrl;
-  };
-
-  const selectedModelData = openRouterModels.find(m => (m.slug || m.id) === baseModel) || defaultModels.find(m => (m.slug || m.id) === baseModel);
-  const selectedModelIconUrl = selectedModelData ? getModelIcon(selectedModelData.name, selectedModelData.endpoint?.provider_info?.icon?.url) : null;
 
   const handleBack = () => {
     if (setEditingPersona) setEditingPersona(null);
@@ -154,6 +72,7 @@ export default function NewPersonaView() {
     setIsSaving(true);
     let generatedSystemPrompt = '';
     let generatedTagline = '';
+    let generatedWelcomeMessage = '';
 
     try {
       const promptToAI = `Buat system prompt spesifik (maks 3 paragraf) untuk AI ini:
@@ -162,10 +81,13 @@ Minat: ${interest}
 Gaya: ${tone}
 Sifat: ${type}
 
+PENTING: Instruksikan AI untuk BENAR-BENAR mengadopsi identitas bernama "${name}". AI HARUS menggunakan nama "${name}" saat merespons, memperkenalkan diri, atau menyebut dirinya sendiri (jangan menggunakan "saya adalah asisten AI" atau entitas bahasa lainnya). Jika pengguna memanggil dengan nama "${name}", AI harus merespons secara natural sebagai identitas tersebut tanpa keluar dari karakter.
+
 KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT:
 {
-  "prompt_hasil": "isi prompt dari sudut pandang 'Kamu adalah...'",
-  "tagline": "Frasa singkat 1-3 kata yang menggambarkan profesi atau keahlian karakter ini (misal: Pakar Teknologi, Tukang Debat, Motivator Handal)"
+  "prompt_hasil": "isi prompt dari sudut pandang 'Kamu adalah [Nama]...'",
+  "tagline": "Frasa singkat 1-3 kata yang menggambarkan profesi atau keahlian karakter ini (misal: Pakar Teknologi, Tukang Debat, Motivator Handal)",
+  "sapaan": "Satu kalimat sapaan pembuka khas karakter ini (misal: 'Halo! Ada yang bisa kubantu tentang kode hari ini?' atau 'Yo! Mau ngobrolin film apa kita?')"
 }`;
 
       const aiMessages = [{ sender: 'user', text: promptToAI }];
@@ -177,6 +99,7 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT:
         const parsed = JSON.parse(cleanJson);
         generatedSystemPrompt = parsed.prompt_hasil || cleanJson;
         generatedTagline = parsed.tagline || `${interest} | ${tone}`;
+        generatedWelcomeMessage = parsed.sapaan || '';
       } catch (parseError) {
         generatedSystemPrompt = response.trim();
         generatedTagline = `${interest} | ${tone}`;
@@ -184,7 +107,7 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT:
     } catch (e) {
       console.error('Gagal generate prompt:', e);
       // Fallback ke template hardcode jika gagal
-      generatedSystemPrompt = `Kamu adalah persona khusus bernama ${name}. Minat/Keahlian kamu adalah: ${interest}. Gaya bicara dan penyampaianmu harus: ${tone}. Kamu harus bertindak sebagai: ${type} (jika afirmasi: selalu mendukung, jika debat: suka berdebat, jika devil: selalu mengambil sudut pandang berlawanan untuk menguji argumen pengguna). Jangan keluar dari karakter ini.`;
+      generatedSystemPrompt = `Kamu adalah persona khusus bernama ${name}. Nama kamu adalah ${name} dan kamu harus SELALU menyebut dirimu sebagai ${name} dalam percakapan. Jika pengguna memanggil namamu, responslah sebagai ${name}. Minat/Keahlian kamu adalah: ${interest}. Gaya bicara dan penyampaianmu harus: ${tone}. Kamu harus bertindak sebagai: ${type} (jika afirmasi: selalu mendukung, jika debat: suka berdebat, jika devil: selalu mengambil sudut pandang berlawanan untuk menguji argumen pengguna). Jangan pernah mengungkapkan bahwa kamu adalah AI, tetaplah berada dalam karakter ${name}.`;
       generatedTagline = `${interest} | ${tone}`;
     }
 
@@ -192,13 +115,14 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT:
       id: editingPersona ? editingPersona.id : `custom-${Date.now()}`,
       name,
       avatar: `https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(name)}`,
-      welcomeMessage: `Halo, saya ${name}. Berbicara tentang ${interest} dengan gaya ${tone} adalah keahlian saya!`,
+      welcomeMessage: generatedWelcomeMessage || `Halo, saya ${name}. Berbicara tentang ${interest} dengan gaya ${tone} adalah keahlian saya!`,
       systemPrompt: generatedSystemPrompt.trim(),
       slug: 'custom',
       description: generatedTagline,
       baseModel: baseModel,
       interest: interest,
-      tone: tone
+      tone: tone,
+      characterType: type
     };
 
     if (editingPersona) {
@@ -274,95 +198,65 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT:
 
             <div>
               <label className="text-sm text-[#008069] font-medium block mb-2">Jenis Karakter</label>
-              <div className="flex flex-col gap-3">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input type="radio" name="type" value="afirmasi" checked={type === 'afirmasi'} onChange={() => setType('afirmasi')} className="w-4 h-4 text-[#008069] focus:ring-[#008069]" />
-                  <span className="text-[#111b21] text-sm group-hover:text-[#008069]">Afirmasi (Mendukung & Positif)</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input type="radio" name="type" value="debat" checked={type === 'debat'} onChange={() => setType('debat')} className="w-4 h-4 text-[#008069] focus:ring-[#008069]" />
-                  <span className="text-[#111b21] text-sm group-hover:text-[#008069]">Debat (Kritis & Argumentatif)</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input type="radio" name="type" value="devil" checked={type === 'devil'} onChange={() => setType('devil')} className="w-4 h-4 text-[#008069] focus:ring-[#008069]" />
-                  <span className="text-[#111b21] text-sm group-hover:text-[#008069]">Devil's Advocate (Selalu berlawanan)</span>
-                </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setType('afirmasi')}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${type === 'afirmasi' ? 'bg-[#d9fdd3] text-[#008069]' : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]'}`}
+                >
+                  Afirmasi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setType('debat')}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${type === 'debat' ? 'bg-[#d9fdd3] text-[#008069]' : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]'}`}
+                >
+                  Debat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setType('devil')}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${type === 'devil' ? 'bg-[#d9fdd3] text-[#008069]' : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]'}`}
+                >
+                  Devil's Advocate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setType('')}
+                  className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${!['afirmasi', 'debat', 'devil'].includes(type) ? 'bg-[#d9fdd3] text-[#008069]' : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef]'}`}
+                >
+                  Kustom
+                </button>
               </div>
+              
+              {!['afirmasi', 'debat', 'devil'].includes(type) && (
+                <input
+                  type="text"
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  placeholder="Ketik jenis karakter kustom (misal: Suka bercanda, Bijak)"
+                  className="w-full border-b-2 border-[#8696a0] focus:border-[#008069] bg-transparent outline-none py-2 text-[#111b21] transition-colors mt-2 text-sm"
+                  autoFocus
+                />
+              )}
             </div>
 
             <div>
               <label className="text-sm text-[#008069] font-medium block mb-2">Model Dasar (AI Backend)</label>
-              <div className="relative" ref={dropdownRef}>
-                <button
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  disabled={isLoadingModels && !selectedModelData}
-                  className="w-full bg-[#f0f2f5] border border-[#e9edef] text-[#111b21] rounded-md py-2.5 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#008069] flex items-center justify-between transition-colors"
-                >
-                  <div className="flex items-center gap-3 truncate">
-                    {selectedModelIconUrl ? (
-                      <img src={selectedModelIconUrl} alt="icon" className="w-5 h-5 object-contain shrink-0" />
-                    ) : (
-                      <Bot size={20} className="text-[#54656f] shrink-0" />
-                    )}
-                    <span className="truncate text-[#111b21]">{selectedModelData ? selectedModelData.name : (baseModel || 'Pilih model...')}</span>
-                  </div>
-                  {isLoadingModels && !selectedModelData ? (
-                    <CircleDashed size={16} className="animate-spin text-[#008069] shrink-0" />
+              <button
+                onClick={() => setIsModelModalOpen(true)}
+                className="w-full bg-[#f0f2f5] border border-[#e9edef] text-[#111b21] rounded-md py-2.5 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#008069] flex items-center justify-between transition-colors"
+              >
+                <div className="flex items-center gap-3 truncate">
+                  {selectedModelIconUrl ? (
+                    <img src={selectedModelIconUrl} alt="icon" className="w-5 h-5 object-contain shrink-0" />
                   ) : (
-                    <ChevronDown size={18} className={`text-[#54656f] transition-transform shrink-0 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                    <Bot size={20} className="text-[#54656f] shrink-0" />
                   )}
-                </button>
-                
-                {isDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#e9edef] rounded-md shadow-lg z-50 overflow-hidden animate-fade-in">
-                    <div className="p-2 border-b border-[#f0f2f5] sticky top-0 bg-white z-10">
-                      <div className="flex items-center gap-2 bg-[#f0f2f5] rounded px-3 py-1.5 focus-within:ring-1 focus-within:ring-[#008069]">
-                        <Search size={16} className="text-[#54656f]" />
-                        <input
-                          type="text"
-                          placeholder="Cari model AI..."
-                          value={modelSearchQuery}
-                          onChange={(e) => setModelSearchQuery(e.target.value)}
-                          className="w-full bg-transparent border-none outline-none text-sm text-[#111b21]"
-                          autoFocus
-                        />
-                      </div>
-                    </div>
-                    <div className="max-h-60 overflow-y-auto scrollbar-thin">
-                      {isLoadingModels ? (
-                        <div className="p-4 text-center text-sm text-[#54656f] flex items-center justify-center gap-2">
-                          <CircleDashed size={16} className="animate-spin text-[#008069]" /> Mencari...
-                        </div>
-                      ) : openRouterModels.length > 0 ? (
-                        openRouterModels.map((m) => {
-                          const icon = getModelIcon(m.name, m.endpoint?.provider_info?.icon?.url);
-                          return (
-                            <div
-                              key={m.slug || m.id}
-                              onClick={() => {
-                                setBaseModel(m.slug || m.id);
-                                setIsDropdownOpen(false);
-                                setModelSearchQuery('');
-                              }}
-                              className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-[#f5f6f6] transition-colors ${baseModel === (m.slug || m.id) ? 'bg-[#f0f2f5]' : ''}`}
-                            >
-                              <div className="shrink-0 w-7 h-7 flex items-center justify-center bg-white rounded-full border border-[#e9edef] overflow-hidden">
-                                {icon ? <img src={icon} alt={m.name} className="w-4 h-4 object-contain" /> : <Bot size={16} className="text-[#54656f]" />}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-[13px] font-medium text-[#111b21] truncate leading-tight">{m.name}</h4>
-                                <p className="text-[11px] text-[#8696a0] truncate mt-0.5">{m.slug || m.id}</p>
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="p-4 text-center text-sm text-[#54656f]">Model tidak ditemukan.</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+                  <span className="truncate text-[#111b21]">{selectedModelData ? selectedModelData.name : (baseModel || 'Pilih model...')}</span>
+                </div>
+                <ChevronDown size={18} className="text-[#54656f] transition-transform shrink-0" />
+              </button>
             </div>
           </div>
 
@@ -378,7 +272,7 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT:
       <div className="bg-[#f0f2f5] p-6 flex justify-center shrink-0">
         <button
           onClick={handleSave}
-          disabled={!name.trim() || isSaving}
+          disabled={!name.trim() || !type.trim() || isSaving}
           className="bg-[#008069] text-white px-8 py-3 rounded-md shadow-md hover:bg-[#06cf9c] transition-colors flex items-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSaving ? (
@@ -394,6 +288,16 @@ KEMBALIKAN HANYA JSON MURNI DENGAN FORMAT:
           )}
         </button>
       </div>
+      <ModelSearchModal
+        isOpen={isModelModalOpen}
+        onClose={() => setIsModelModalOpen(false)}
+        onSelect={(model, iconUrl) => {
+          setBaseModel(model.slug || model.id);
+          setSelectedModelData(model);
+          setSelectedModelIconUrl(iconUrl);
+          setIsModelModalOpen(false);
+        }}
+      />
     </div>
   );
 }

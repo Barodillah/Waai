@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { PlusCircle, Search, X, MessageSquare, Bot, CheckCheck, Trash2, ArrowLeft, Users, UserPlus, Megaphone, CircleDashed, Phone, MessageSquarePlus, MoreHorizontal, MoreVertical, Camera, Plus, CheckCircle2, Pin, Check } from 'lucide-react';
+import { useState } from 'react';
+import { PlusCircle, Search, X, MessageSquare, Bot, CheckCheck, Trash2, ArrowLeft, Users, UserPlus, Megaphone, CircleDashed, Phone, MessageSquarePlus, MoreHorizontal, MoreVertical, Camera, Plus, CheckCircle2, Pin, Check, Zap, ChevronDown } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
-import { AI_PERSONAS } from '../data/personas';
 import ProfileSettings from './ProfileSettings';
 import ApiKeyView from './ApiKeyView';
 import ConfirmModal from './ConfirmModal';
+import NewChatView from './NewChatView';
+import NewGroupView from './NewGroupView';
 import { useNavigate } from 'react-router-dom';
 
 export default function Sidebar() {
@@ -16,6 +17,7 @@ export default function Sidebar() {
     activeMobileTab,
     setActiveMobileTab,
     startNewChat,
+    startIncognitoChat,
     deleteSession,
     deleteMultipleSessions,
     showToast,
@@ -27,72 +29,46 @@ export default function Sidebar() {
   } = useChat();
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [openDropdownId, setOpenDropdownId] = useState(null);
   const [personaToDelete, setPersonaToDelete] = useState(null);
   const [selectedChatIds, setSelectedChatIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [openRouterModels, setOpenRouterModels] = useState([]);
-  const [defaultModels, setDefaultModels] = useState([]);
-  const [isLoadingModels, setIsLoadingModels] = useState(false);
-  const [modelSearchQuery, setModelSearchQuery] = useState('');
+  const [pendingNavigation, setPendingNavigation] = useState(null);
+  const [showDeleteMultipleConfirm, setShowDeleteMultipleConfirm] = useState(false);
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
 
-  useEffect(() => {
-    const fetchModels = async () => {
-      setIsLoadingModels(true);
-      try {
-        const response = await fetch('https://openrouter.ai/api/frontend/v1/models/find?active=true&order=most-popular&output_modalities=text');
-        const data = await response.json();
-        // Limit to 20 models for performance in this UI
-        const models = data.data.models.slice(0, 20);
-        setOpenRouterModels(models);
-        setDefaultModels(models);
-      } catch (error) {
-        console.error('Failed to fetch OpenRouter models:', error);
-      } finally {
-        setIsLoadingModels(false);
-      }
-    };
-    fetchModels();
-  }, []);
+  const handleNavigation = (action) => {
+    const currentSession = sessions.find(s => s.id === activeSessionId);
+    if (currentSession?.isIncognito) {
+      setPendingNavigation(() => action);
+    } else {
+      action();
+    }
+  };
 
-  useEffect(() => {
-    const searchModels = async () => {
-      if (modelSearchQuery.length >= 3) {
-        setIsLoadingModels(true);
-        try {
-          const response = await fetch(`https://openrouter.ai/api/frontend/v1/models/find?active=true&output_modalities=text&q=${encodeURIComponent(modelSearchQuery)}`);
-          const data = await response.json();
-          setOpenRouterModels(data.data.models.slice(0, 20));
-        } catch (error) {
-          console.error('Failed to search models:', error);
-        } finally {
-          setIsLoadingModels(false);
-        }
-      } else if (modelSearchQuery.length === 0) {
-        setOpenRouterModels(defaultModels);
-      }
-    };
 
-    const timeoutId = setTimeout(() => {
-      searchModels();
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [modelSearchQuery, defaultModels]);
 
   const filteredSessions = sessions.filter(
     (s) =>
+      !s.isIncognito && (
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.messages[s.messages.length - 1]?.text.toLowerCase().includes(searchQuery.toLowerCase())
+      ) &&
+      (
+        activeFilter === 'all' ? true :
+        activeFilter === 'persona' ? (!s.isGroup && s.personaId && !s.personaId.includes('/')) :
+        activeFilter === 'model' ? (!s.isGroup && s.personaId && s.personaId.includes('/')) :
+        activeFilter === 'group' ? (s.isGroup) :
+        (s.personaId === activeFilter)
+      )
   );
 
   return (
     <div
-      className={`h-full flex flex-col transition-all duration-200 border-r border-[#e9edef] bg-[#ffffff] ${
-        ((activeSessionId && activeMobileTab === 'chats') || activeProfileFeature === 'new_persona') 
-          ? 'hidden md:flex md:w-[380px] lg:w-[420px]' 
+      className={`h-full flex flex-col transition-all duration-200 border-r border-[#e9edef] bg-[#ffffff] ${((activeSessionId && activeMobileTab === 'chats') || activeProfileFeature === 'new_persona')
+          ? 'hidden md:flex md:w-[380px] lg:w-[420px]'
           : 'w-full md:w-[380px] lg:w-[420px]'
-      }`}
+        }`}
     >
       {activeMobileTab === 'chats' && (
         isSelectionMode ? (
@@ -114,9 +90,7 @@ export default function Sidebar() {
               <button
                 onClick={() => {
                   if (selectedChatIds.length > 0) {
-                    deleteMultipleSessions(selectedChatIds);
-                    setIsSelectionMode(false);
-                    setSelectedChatIds([]);
+                    setShowDeleteMultipleConfirm(true);
                   }
                 }}
                 className="hover:bg-[#f0f2f5] p-1.5 rounded-full transition-colors"
@@ -167,13 +141,104 @@ export default function Sidebar() {
             </div>
 
             {/* Filter Pills */}
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-              <button className="px-4 py-1.5 rounded-full text-[13px] whitespace-nowrap bg-[#dcf8c6] text-[#008069]">Semua</button>
-              {AI_PERSONAS.map(persona => (
-                <button key={persona.id} className="px-4 py-1.5 rounded-full text-[13px] whitespace-nowrap bg-[#f0f2f5] text-[#54656f]">
-                  {persona.name.split(' ')[0]}
+            <div className="flex items-center gap-2 pr-2">
+              <div className="flex-1 flex gap-2 overflow-x-auto no-scrollbar py-1 pl-1 items-center">
+                <button 
+                  onClick={() => setActiveFilter('all')}
+                  className={`px-3 py-1.5 rounded-full text-[13px] whitespace-nowrap transition-colors ${activeFilter === 'all' ? 'bg-[#e7fce3] text-[#008069] font-medium border border-[#e7fce3]' : 'bg-white border border-[#e9edef] text-[#54656f] hover:bg-[#f5f6f6]'}`}
+                >
+                  Semua
                 </button>
-              ))}
+                
+                {(() => {
+                  const personaCount = sessions.filter(s => !s.isGroup && s.personaId && !s.personaId.includes('/') && !s.isIncognito).length;
+                  const modelCount = sessions.filter(s => !s.isGroup && s.personaId && s.personaId.includes('/') && !s.isIncognito).length;
+                  const groupCount = sessions.filter(s => s.isGroup).length;
+                  
+                  return (
+                    <>
+                      {personaCount > 0 && (
+                        <button 
+                          onClick={() => setActiveFilter('persona')}
+                          className={`px-3 py-1.5 rounded-full text-[13px] whitespace-nowrap transition-colors flex items-center gap-1.5 ${activeFilter === 'persona' ? 'bg-[#e7fce3] text-[#008069] font-medium border border-[#e7fce3]' : 'bg-white border border-[#e9edef] text-[#54656f] hover:bg-[#f5f6f6]'}`}
+                        >
+                          Persona <span className="text-[11px] opacity-80">{personaCount}</span>
+                        </button>
+                      )}
+                      {modelCount > 0 && (
+                        <button 
+                          onClick={() => setActiveFilter('model')}
+                          className={`px-3 py-1.5 rounded-full text-[13px] whitespace-nowrap transition-colors flex items-center gap-1.5 ${activeFilter === 'model' ? 'bg-[#e7fce3] text-[#008069] font-medium border border-[#e7fce3]' : 'bg-white border border-[#e9edef] text-[#54656f] hover:bg-[#f5f6f6]'}`}
+                        >
+                          Model <span className="text-[11px] opacity-80">{modelCount}</span>
+                        </button>
+                      )}
+                      {groupCount > 0 && (
+                        <button 
+                          onClick={() => setActiveFilter('group')}
+                          className={`px-3 py-1.5 rounded-full text-[13px] whitespace-nowrap transition-colors flex items-center gap-1.5 ${activeFilter === 'group' ? 'bg-[#e7fce3] text-[#008069] font-medium border border-[#e7fce3]' : 'bg-white border border-[#e9edef] text-[#54656f] hover:bg-[#f5f6f6]'}`}
+                        >
+                          Grup <span className="text-[11px] opacity-80">{groupCount}</span>
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div className="relative shrink-0">
+                <button 
+                  onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                  className="px-2 py-1.5 rounded-full bg-white border border-[#e9edef] text-[#54656f] hover:bg-[#f5f6f6] flex items-center justify-center transition-colors"
+                >
+                  <ChevronDown size={16} />
+                </button>
+                
+                {isFilterDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)] border border-[#e9edef] py-2 z-50 overflow-hidden">
+                    <div className="px-4 pb-2 pt-1">
+                      <span className="text-[11px] font-semibold text-[#54656f] uppercase tracking-wider">Filter Model</span>
+                    </div>
+                    {(() => {
+                      const usedModels = sessions.filter(s => s.personaId.includes('/') && !s.isIncognito)
+                        .reduce((acc, s) => {
+                          const existing = acc.find(m => m.id === s.personaId);
+                          if (!existing) {
+                            acc.push({
+                              id: s.personaId,
+                              name: s.personaId.split('/').pop(),
+                              count: 1
+                            });
+                          } else {
+                            existing.count++;
+                          }
+                          return acc;
+                        }, [])
+                        .sort((a, b) => b.count - a.count);
+
+                      return usedModels.length > 0 ? (
+                        <>
+                          {usedModels.map(model => (
+                            <button 
+                              key={model.id}
+                              onClick={() => {
+                                setActiveFilter(model.id);
+                                setIsFilterDropdownOpen(false);
+                              }}
+                              className="w-full text-left px-4 py-2 text-[14px] text-[#111b21] hover:bg-[#f5f6f6] flex items-center justify-between"
+                            >
+                              <span className={`truncate mr-2 ${activeFilter === model.id ? "font-bold text-[#008069]" : ""}`}>{model.name}</span>
+                              <span className="text-[12px] text-[#54656f] shrink-0">{model.count}</span>
+                            </button>
+                          ))}
+                        </>
+                      ) : (
+                        <div className="px-4 py-2 text-[13px] text-[#54656f] text-center">Belum ada obrolan dengan model.</div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -186,7 +251,7 @@ export default function Sidebar() {
                   Jelajahi berbagai model AI dari seluruh dunia untuk mendiskusikan apa saja.
                 </p>
                 <button
-                  onClick={() => setActiveMobileTab('new_chat')}
+                  onClick={() => handleNavigation(() => setActiveMobileTab('new_chat'))}
                   className="bg-[#00a884] hover:bg-[#008f6f] text-white px-6 py-2.5 rounded-full font-medium transition-colors shadow-sm text-sm"
                 >
                   Buat Chat Baru
@@ -209,8 +274,10 @@ export default function Sidebar() {
                             : [...prev, session.id]
                         );
                       } else {
-                        setActiveSessionId(session.id);
-                        navigate(`/chat/${session.id}`);
+                        handleNavigation(() => {
+                          setActiveSessionId(session.id);
+                          navigate(`/chat/${session.id}`);
+                        });
                       }
                     }}
                     className={`flex items-center gap-3 px-3 py-3 cursor-pointer transition-colors relative group ${isSelectedForChat && !isSelectionMode ? 'bg-[#ebebeb]' : 'hover:bg-[#f5f6f6] bg-white'}`}
@@ -227,13 +294,20 @@ export default function Sidebar() {
                       </div>
                     )}
                     <div className="relative shrink-0 transition-transform duration-200">
-                      <img
-                        src={session.avatar}
-                        alt={session.name}
-                        className="w-12 h-12 rounded-full object-cover border border-[#e9edef]"
-                      />
+                      {session.isGroup && session.members?.length >= 2 ? (
+                        <div className="relative w-12 h-12">
+                          <img src={session.members[1].avatar} className="absolute bottom-0 right-0 w-8 h-8 rounded-full object-cover border-2 border-white z-0 bg-[#f0f2f5]" />
+                          <img src={session.members[0].avatar} className="absolute top-0 left-0 w-9 h-9 rounded-full object-cover border-2 border-white z-10 bg-[#f0f2f5]" />
+                        </div>
+                      ) : (
+                        <img
+                          src={session.avatar}
+                          alt={session.name}
+                          className="w-12 h-12 rounded-full object-cover border border-[#e9edef] bg-[#f0f2f5]"
+                        />
+                      )}
                       {!isSelectionMode && (
-                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a884] rounded-full ring-2 ring-white"></span>
+                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-[#00a884] rounded-full ring-2 ring-white z-20"></span>
                       )}
                     </div>
 
@@ -254,7 +328,11 @@ export default function Sidebar() {
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
-                          {/* Trash button moved to ContactInfo */}
+                          {session.unreadCount > 0 && (
+                            <span className="bg-[#00a884] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                              {session.unreadCount}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -268,198 +346,15 @@ export default function Sidebar() {
         <ProfileSettings />
       ) : activeMobileTab === 'apikey' ? (
         <ApiKeyView isMobile={true} />
+      ) : activeProfileFeature === 'new_group' ? (
+        <NewGroupView />
       ) : (
-        <div className="flex-1 overflow-y-auto bg-white flex flex-col h-full">
-          {/* Header Obrolan Baru */}
-          <div className="h-16 px-4 bg-[#f0f2f5] border-b border-[#e9edef] flex items-center gap-6 shrink-0 text-[#54656f]">
-            <button onClick={() => setActiveMobileTab('chats')} className="hover:text-[#111b21] transition-colors p-1 rounded-full">
-              <ArrowLeft size={20} />
-            </button>
-            <span className="text-base font-medium text-[#111b21]">Obrolan baru</span>
-          </div>
-
-          <div className="p-3 border-b border-[#f0f2f5] shrink-0">
-            <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm bg-[#f0f2f5] text-[#111b21]">
-              <Search size={18} className="text-[#54656f] shrink-0" />
-              <input
-                type="text"
-                value={modelSearchQuery}
-                onChange={(e) => setModelSearchQuery(e.target.value)}
-                placeholder="Cari model AI..."
-                className="w-full bg-transparent border-none outline-none placeholder-[#54656f] text-sm text-[#111b21]"
-              />
-              {modelSearchQuery && (
-                <button onClick={() => setModelSearchQuery('')} className="text-[#54656f] hover:text-[#111b21]">
-                  <X size={16} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {/* Action list */}
-            <div className="py-2">
-              <div className="flex items-center gap-4 px-4 py-3 hover:bg-[#f5f6f6] cursor-pointer">
-                <div className="w-10 h-10 rounded-full bg-[#00a884] text-white flex items-center justify-center shrink-0">
-                  <Users size={20} />
-                </div>
-                <span className="text-sm font-medium text-[#111b21]">Grup baru</span>
-              </div>
-              <div 
-                className="flex items-center gap-4 px-4 py-3 hover:bg-[#f5f6f6] cursor-pointer"
-                onClick={() => {
-                  setActiveProfileFeature('new_persona');
-                }}
-              >
-                <div className="w-10 h-10 rounded-full bg-[#00a884] text-white flex items-center justify-center shrink-0">
-                  <UserPlus size={20} />
-                </div>
-                <span className="text-sm font-medium text-[#111b21]">Persona baru</span>
-              </div>
-            </div>
-
-
-
-            {customPersonas && customPersonas.length > 0 && (
-              <>
-                <div className="px-4 py-2 mt-2 border-t border-[#f0f2f5]">
-                  <h3 className="text-[13px] text-[#54656f] font-medium">Persona Tersimpan</h3>
-                </div>
-                {customPersonas.map((persona) => (
-                  <div
-                    key={persona.id}
-                    onClick={() => startNewChat(persona)}
-                    className="flex items-center gap-3 md:gap-4 px-3 md:px-4 py-2 md:py-3 hover:bg-[#f5f6f6] cursor-pointer group"
-                  >
-                    <img
-                      src={persona.avatar}
-                      alt={persona.name}
-                      className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover shrink-0"
-                    />
-                    <div className="flex-1 min-w-0 border-b border-[#f0f2f5] pb-2 md:pb-3 flex items-center justify-between">
-                      <div className="min-w-0 flex-1 pr-2">
-                        <div className="flex justify-between items-baseline mb-0.5">
-                          <h3 className="text-[15px] md:text-base font-normal text-[#111b21] truncate pr-2">
-                            {persona.name}
-                          </h3>
-                        </div>
-                        <p className="text-[13px] md:text-sm text-[#54656f] truncate">
-                          {persona.description}
-                        </p>
-                      </div>
-                      
-                      <div className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <button 
-                          onClick={() => setOpenDropdownId(openDropdownId === persona.id ? null : persona.id)}
-                          className={`p-2 text-[#54656f] hover:bg-[#ebebeb] rounded-full transition-opacity ${openDropdownId === persona.id ? 'opacity-100 bg-[#ebebeb]' : 'opacity-0 group-hover:opacity-100'}`}
-                        >
-                          <MoreVertical size={20} />
-                        </button>
-                        
-                        {openDropdownId === persona.id && (
-                          <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-lg border border-[#e9edef] py-1 z-50 overflow-hidden">
-                            <button 
-                              onClick={() => {
-                                alert(`Info Persona:\n\nNama: ${persona.name}\nDeskripsi: ${persona.description}\n\nPrompt Sistem:\n${persona.systemPrompt}`);
-                                setOpenDropdownId(null);
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-[#111b21] hover:bg-[#f5f6f6]"
-                            >
-                              Info persona
-                            </button>
-                            <button 
-                              onClick={() => {
-                                setEditingPersona(persona);
-                                setActiveProfileFeature('new_persona');
-                                setOpenDropdownId(null);
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-[#111b21] hover:bg-[#f5f6f6]"
-                            >
-                              Edit
-                            </button>
-                            <button 
-                              onClick={() => {
-                                setPersonaToDelete(persona);
-                                setOpenDropdownId(null);
-                              }}
-                              className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-[#f5f6f6]"
-                            >
-                              Hapus
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-
-            <div className="px-4 py-2 mt-2 border-t border-[#f0f2f5]">
-              <h3 className="text-[13px] text-[#54656f] font-medium">Model Avaliable</h3>
-            </div>
-
-            {isLoadingModels ? (
-              <div className="px-4 py-3 text-sm text-[#54656f] text-center flex items-center justify-center gap-2">
-                <CircleDashed size={18} className="animate-spin text-[#00a884]" />
-                Memuat model...
-              </div>
-            ) : (
-              openRouterModels.map((model) => {
-                const modelName = model.name.toLowerCase();
-                let iconUrl = null;
-                
-                if (modelName.includes('gemini')) iconUrl = 'https://openrouter.ai/images/icons/GoogleGemini.svg';
-                else if (modelName.includes('deepseek')) iconUrl = 'https://openrouter.ai/images/icons/DeepSeek.png';
-                else if (modelName.includes('openai')) iconUrl = 'https://openrouter.ai/images/icons/OpenAI.svg';
-                else if (modelName.includes('z.ai')) iconUrl = 'https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://z.ai/&size=256';
-                else if (modelName.includes('xiaomi')) iconUrl = 'https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://www.mi.com&size=256';
-                else if (modelName.includes('tencent')) iconUrl = 'https://openrouter.ai/images/icons/Tencent.png';
-                else if (modelName.includes('minimax')) iconUrl = 'https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://minimaxi.com/&size=256';
-                else if (modelName.includes('qwen')) iconUrl = 'https://openrouter.ai/images/icons/Qwen.png';
-                else if (model.endpoint?.provider_info?.icon?.url) {
-                  iconUrl = model.endpoint.provider_info.icon.url.startsWith('/') 
-                    ? `https://openrouter.ai${model.endpoint.provider_info.icon.url}` 
-                    : model.endpoint.provider_info.icon.url;
-                }
-
-                return (
-                  <div
-                    key={model.slug}
-                    onClick={() => startNewChat({
-                      id: model.slug,
-                      name: model.name,
-                      avatar: `https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(model.name)}`,
-                      welcomeMessage: `Halo! Saya adalah ${model.name}. Ada yang bisa saya bantu?`
-                    })}
-                    className="px-4 py-3 flex items-center gap-3.5 hover:bg-[#f5f6f6] cursor-pointer"
-                  >
-                    <div className="relative shrink-0 w-8 h-8 flex items-center justify-center rounded-md bg-[#f0f2f5] overflow-hidden">
-                      {iconUrl ? (
-                        <img
-                          src={iconUrl}
-                          alt={model.name}
-                          className="w-full h-full object-contain p-1"
-                        />
-                      ) : (
-                        <Bot size={18} className="text-[#54656f]" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm text-[#111b21] truncate">{model.name}</h3>
-                      <p className="text-[11px] text-[#54656f] truncate">{model.slug}</p>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
+        <NewChatView handleNavigation={handleNavigation} setPersonaToDelete={setPersonaToDelete} />
       )}
 
       <div className="md:hidden h-[68px] pb-1 border-t border-[#e9edef] bg-[#f0f2f5] flex items-center justify-around px-4 shrink-0 z-10">
         <button
-          onClick={() => setActiveMobileTab('status')}
+          onClick={() => handleNavigation(() => setActiveMobileTab('status'))}
           className="flex flex-col items-center justify-center text-[#111b21]"
         >
           <div className={`relative px-4 py-1 rounded-full ${activeMobileTab === 'status' ? 'bg-[#dcf8c6]' : ''}`}>
@@ -468,7 +363,7 @@ export default function Sidebar() {
           <span className={`text-[10px] mt-1 ${activeMobileTab === 'status' ? 'font-bold' : 'font-medium text-[#54656f]'}`}>Pembaruan</span>
         </button>
         <button
-          onClick={() => setActiveMobileTab('chats')}
+          onClick={() => handleNavigation(() => setActiveMobileTab('chats'))}
           className="flex flex-col items-center justify-center text-[#111b21]"
         >
           <div className={`relative px-4 py-1 rounded-full ${activeMobileTab === 'chats' ? 'bg-[#dcf8c6]' : ''}`}>
@@ -482,7 +377,7 @@ export default function Sidebar() {
           <span className={`text-[10px] mt-1 ${activeMobileTab === 'chats' ? 'font-bold' : 'font-medium'}`}>Chat</span>
         </button>
         <button
-          onClick={() => setActiveMobileTab('profile')}
+          onClick={() => handleNavigation(() => setActiveMobileTab('profile'))}
           className="flex flex-col items-center justify-center text-[#111b21]"
         >
           <div className={`relative px-4 py-1 rounded-full ${activeMobileTab === 'profile' ? 'bg-[#dcf8c6]' : ''}`}>
@@ -492,7 +387,7 @@ export default function Sidebar() {
         </button>
       </div>
 
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={!!personaToDelete}
         title="Hapus Persona"
         message={`Apakah Anda yakin ingin menghapus persona "${personaToDelete?.name}" beserta seluruh riwayat obrolannya? Tindakan ini tidak dapat dibatalkan.`}
@@ -503,12 +398,44 @@ export default function Sidebar() {
             if (sessionToDelete) {
               deleteSession(null, sessionToDelete.id);
             }
-            
+
             deleteCustomPersona(personaToDelete.id);
             setPersonaToDelete(null);
           }
         }}
         onCancel={() => setPersonaToDelete(null)}
+        confirmText="Hapus"
+        cancelText="Batal"
+      />
+
+      <ConfirmModal
+        isOpen={!!pendingNavigation}
+        title="Keluar dari Pertanyaan Cepat?"
+        message="Sesi Pertanyaan Cepat tidak akan disimpan. Apakah Anda yakin ingin keluar?"
+        onConfirm={() => {
+          if (pendingNavigation) {
+            deleteSession(null, activeSessionId);
+            pendingNavigation();
+            setPendingNavigation(null);
+          }
+        }}
+        onCancel={() => setPendingNavigation(null)}
+        confirmText="Ya, Keluar"
+        cancelText="Batal"
+      />
+      <ConfirmModal
+        isOpen={showDeleteMultipleConfirm}
+        title="Hapus Obrolan"
+        message={`Apakah Anda yakin ingin menghapus ${selectedChatIds.length} obrolan yang dipilih? Tindakan ini tidak dapat dibatalkan.`}
+        onConfirm={() => {
+          deleteMultipleSessions(selectedChatIds);
+          setIsSelectionMode(false);
+          setSelectedChatIds([]);
+          setShowDeleteMultipleConfirm(false);
+        }}
+        onCancel={() => setShowDeleteMultipleConfirm(false)}
+        confirmText="Hapus"
+        cancelText="Batal"
       />
     </div>
   );

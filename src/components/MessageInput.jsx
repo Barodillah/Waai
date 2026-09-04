@@ -1,18 +1,20 @@
 import { useState, useRef } from 'react';
-import { Smile, Paperclip, Send, Mic, Code2, Languages, PenTool } from 'lucide-react';
+import { Smile, Paperclip, Send, Mic, Code2, Languages, PenTool, X } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 
 export default function MessageInput({ activeSessionId }) {
   const [inputText, setInputText] = useState('');
   const [showAttachMenu, setShowAttachMenu] = useState(false);
-  const { sendMessage, isTyping, showToast } = useChat();
+  const { sendMessage, isTyping, showToast, replyingTo, setReplyingTo, sessions } = useChat();
+  const activeSession = sessions?.find(s => s.id === activeSessionId);
   const inputRef = useRef(null);
 
   const handleSendMessage = (e) => {
     e?.preventDefault();
     if (!inputText.trim() || isTyping) return;
-    sendMessage(activeSessionId, inputText);
+    sendMessage(activeSessionId, inputText, replyingTo);
     setInputText('');
+    setReplyingTo(null);
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';
     }
@@ -64,7 +66,25 @@ export default function MessageInput({ activeSessionId }) {
         </div>
       )}
 
-      <div className="p-2.5 md:px-4 md:py-3 flex items-center gap-2 shrink-0 bg-[#f0f2f5] border-t border-[#e9edef]">
+      <div className="flex flex-col shrink-0 bg-[#f0f2f5] border-t border-[#e9edef]">
+        {replyingTo && (
+          <div className="px-2.5 pt-2.5 md:px-4 md:pt-3 flex justify-between items-start animate-fade-in">
+            <div className="flex-1 bg-white/70 rounded-xl px-3 py-2 border-l-4 border-[#ea0038] shadow-[0_1px_2px_rgba(0,0,0,0.05)] relative overflow-hidden flex justify-between items-start">
+              <div className="flex flex-col flex-1 min-w-0 pr-4">
+                <span className="text-[13px] font-semibold text-[#ea0038] truncate">{replyingTo.sender === 'user' ? 'Anda' : (activeSession?.name || 'AI')}</span>
+                <span className="text-[13px] text-[#54656f] truncate mt-0.5 max-h-[40px] whitespace-pre-wrap line-clamp-2 leading-snug">{replyingTo.text}</span>
+              </div>
+              <button 
+                onClick={() => setReplyingTo(null)}
+                className="text-[#54656f] hover:text-[#111b21] p-1 absolute top-1.5 right-1.5 bg-white rounded-full hover:bg-[#e9edef]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="p-2.5 md:px-4 md:py-3 flex items-center gap-2">
 
         <button
           type="button"
@@ -117,6 +137,7 @@ export default function MessageInput({ activeSessionId }) {
             <Mic size={22} />
           </button>
         )}
+        </div>
       </div>
     </>
   );

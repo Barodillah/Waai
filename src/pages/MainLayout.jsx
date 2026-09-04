@@ -8,6 +8,7 @@ import MessageSearch from '../components/MessageSearch';
 import ProfileFeatureView from '../components/ProfileFeatureView';
 import ApiKeyView from '../components/ApiKeyView';
 import NewPersonaView from '../components/NewPersonaView';
+import ForwardModal from '../components/ForwardModal';
 
 export default function MainLayout() {
   const { toastMessage, activeSessionId, showContactInfo, showSearchInfo, sessions, activeMobileTab, setActiveMobileTab, activeProfileFeature } = useChat();
@@ -86,6 +87,8 @@ export default function MainLayout() {
           <MessageSearch />
         )}
       </div>
+
+      <ForwardModal />
     </div>
   );
 }
