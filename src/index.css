@@ -15,4 +15,16 @@
     background-color: rgba(0, 0, 0, 0.2);
     border-radius: 20px;
   }
+  
+  .chat-bg {
+    background-image: linear-gradient(rgba(239, 234, 226, 0.85), rgba(239, 234, 226, 0.85)), url('https://bewhy.id/wp-content/uploads/asset_6a9dd7b080f328.81790263.png');
+    background-size: cover;
+    background-position: center;
+  }
+  
+  @media (min-width: 768px) {
+    .chat-bg {
+      background-image: linear-gradient(rgba(239, 234, 226, 0.85), rgba(239, 234, 226, 0.85)), url('https://bewhy.id/wp-content/uploads/asset_6a9dd7b081a066.45403784.png');
+    }
+  }
 }

@@ -8,7 +8,10 @@ export default function ConfirmModal({
   onCancel, 
   confirmText = 'Hapus', 
   cancelText = 'Batal',
-  isDanger = true
+  isDanger = true,
+  extraAction = null,
+  extraText = '',
+  extraStyle = 'bg-[#008069] hover:bg-[#06cf9c] text-white'
 }) {
   if (!isOpen) return null;
 
@@ -20,13 +23,23 @@ export default function ConfirmModal({
           {message}
         </div>
         
-        <div className="flex justify-end gap-2 font-medium">
+        <div className="flex justify-end gap-2 font-medium flex-wrap">
           <button 
             onClick={onCancel}
             className="px-6 py-2.5 text-[#008069] border border-[#e9edef] rounded-full hover:bg-[#f5f6f6] transition-colors text-sm"
           >
             {cancelText}
           </button>
+          
+          {extraAction && (
+            <button 
+              onClick={extraAction}
+              className={`px-6 py-2.5 rounded-full transition-colors shadow-sm text-sm ${extraStyle}`}
+            >
+              {extraText}
+            </button>
+          )}
+
           <button 
             onClick={onConfirm}
             className={`px-6 py-2.5 text-white rounded-full transition-colors shadow-sm text-sm ${

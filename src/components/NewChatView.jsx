@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, X, ArrowLeft, Users, UserPlus, Zap, MoreVertical, CircleDashed, Bot } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
+import { getModelAvatar } from '../utils/avatar';
 
 export default function NewChatView({ handleNavigation, setPersonaToDelete }) {
   const {
@@ -10,7 +11,9 @@ export default function NewChatView({ handleNavigation, setPersonaToDelete }) {
     activeProfileFeature,
     setActiveProfileFeature,
     customPersonas,
-    setEditingPersona
+    setEditingPersona,
+    openRouterApiKey,
+    showApiKeyModal
   } = useChat();
 
   const [openDropdownId, setOpenDropdownId] = useState(null);
@@ -29,7 +32,7 @@ export default function NewChatView({ handleNavigation, setPersonaToDelete }) {
     const fetchModels = async () => {
       setIsLoadingModels(true);
       try {
-        const response = await fetch('https://openrouter.ai/api/frontend/v1/models/find?active=true&order=most-popular&output_modalities=text');
+        const response = await fetch('https://openrouter.ai/api/frontend/v1/models/find?active=true&order=most-popular&output_modalities=text&categories=roleplay');
         const data = await response.json();
         // Limit to 20 models for performance in this UI
         const models = data.data.models.slice(0, 20);
@@ -101,9 +104,13 @@ export default function NewChatView({ handleNavigation, setPersonaToDelete }) {
         {/* Action list - hide during search */}
         {!modelSearchQuery && (
           <div className="py-2">
-            <div 
+            <div
               className={`flex items-center gap-4 px-4 py-3 hover:bg-[#f5f6f6] cursor-pointer ${activeProfileFeature === 'new_group' ? 'bg-[#f0f2f5]' : ''}`}
               onClick={() => {
+                if (!openRouterApiKey) {
+                  showApiKeyModal();
+                  return;
+                }
                 handleNavigation(() => setActiveProfileFeature('new_group'));
               }}
             >
@@ -115,6 +122,10 @@ export default function NewChatView({ handleNavigation, setPersonaToDelete }) {
             <div
               className={`flex items-center gap-4 px-4 py-3 hover:bg-[#f5f6f6] cursor-pointer ${activeProfileFeature === 'new_persona' ? 'bg-[#f0f2f5]' : ''}`}
               onClick={() => {
+                if (!openRouterApiKey) {
+                  showApiKeyModal();
+                  return;
+                }
                 handleNavigation(() => setActiveProfileFeature('new_persona'));
               }}
             >
@@ -125,7 +136,13 @@ export default function NewChatView({ handleNavigation, setPersonaToDelete }) {
             </div>
             <div
               className="flex items-center gap-4 px-4 py-3 hover:bg-[#f5f6f6] cursor-pointer"
-              onClick={() => handleNavigation(() => { setActiveProfileFeature(null); startIncognitoChat(); })}
+              onClick={() => {
+                if (!openRouterApiKey) {
+                  showApiKeyModal();
+                  return;
+                }
+                handleNavigation(() => { setActiveProfileFeature(null); startIncognitoChat(); })
+              }}
             >
               <div className="w-10 h-10 rounded-full bg-[#00a884] text-white flex items-center justify-center shrink-0">
                 <Zap size={20} />
@@ -143,7 +160,13 @@ export default function NewChatView({ handleNavigation, setPersonaToDelete }) {
             {filteredPersonas.map((persona) => (
               <div
                 key={persona.id}
-                onClick={() => handleNavigation(() => { setActiveProfileFeature(null); startNewChat(persona); })}
+                onClick={() => {
+                  if (!openRouterApiKey) {
+                    showApiKeyModal();
+                    return;
+                  }
+                  handleNavigation(() => { setActiveProfileFeature(null); startNewChat(persona); })
+                }}
                 className="flex items-center gap-3 md:gap-4 px-3 md:px-4 py-2 md:py-3 hover:bg-[#f5f6f6] cursor-pointer group"
               >
                 <img
@@ -241,12 +264,20 @@ export default function NewChatView({ handleNavigation, setPersonaToDelete }) {
             return (
               <div
                 key={`${model.slug}-${idx}`}
-                onClick={() => handleNavigation(() => { setActiveProfileFeature(null); startNewChat({
-                  id: model.slug,
-                  name: model.name,
-                  avatar: `https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(model.name)}`,
-                  welcomeMessage: `Halo! Saya adalah ${model.name}. Ada yang bisa saya bantu?`
-                }); })}
+                onClick={() => {
+                  if (!openRouterApiKey) {
+                    showApiKeyModal();
+                    return;
+                  }
+                  handleNavigation(() => {
+                    setActiveProfileFeature(null); startNewChat({
+                      id: model.slug,
+                      name: model.name,
+                      avatar: iconUrl || getModelAvatar(model.name),
+                      welcomeMessage: `Halo! Saya adalah ${model.name}. Ada yang bisa saya bantu?`
+                    });
+                  })
+                }}
                 className="px-4 py-3 flex items-center gap-3.5 hover:bg-[#f5f6f6] cursor-pointer"
               >
                 <div className="relative shrink-0 w-8 h-8 flex items-center justify-center rounded-md bg-[#f0f2f5] overflow-hidden">

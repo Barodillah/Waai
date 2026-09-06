@@ -15,19 +15,50 @@ import {
   Check,
   X
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useChat } from '../context/ChatContext';
+import { useUser } from '../context/UserContext';
+import ModelSearchModal from './ModelSearchModal';
 
-export default function ProfileSettings() {
-  const { setActiveMobileTab, setActiveProfileFeature, userName, saveUserName } = useChat();
+export default function ProfileSettings({ onClose }) {
+  const fileInputRef = useRef(null);
+  const { user, updateUserName } = useUser();
+  const { setActiveMobileTab, setActiveProfileFeature, defaultIncognitoModel, updateDefaultIncognitoModel, showToast } = useChat();
   const [isEditingName, setIsEditingName] = useState(false);
+  const [userName, setUserName] = useState(user?.name || 'Ananda');
   const [tempName, setTempName] = useState('');
+  const [isModelModalOpen, setIsModelModalOpen] = useState(false);
+
+  // Update local state when user context changes
+  useEffect(() => {
+    if (user?.name) setUserName(user.name);
+  }, [user]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('waai_auth_token');
+    window.location.href = '/auth';
+  };
+
+  const saveUserName = async (newName) => {
+    if (newName.trim()) {
+      setUserName(newName);
+      await updateUserName(newName);
+    }
+  };
 
   const handleApiKeyClick = () => {
     if (window.innerWidth < 768) {
       setActiveMobileTab('apikey');
     } else {
       setActiveProfileFeature('apikey');
+    }
+  };
+
+  const handleMemoriesClick = () => {
+    if (window.innerWidth < 768) {
+      setActiveMobileTab('memories');
+    } else {
+      setActiveProfileFeature('memories');
     }
   };
 
@@ -45,8 +76,8 @@ export default function ProfileSettings() {
           {/* Avatar */}
           <div className="relative mt-2">
             <img
-              src="https://bewhy.id/wp-content/uploads/asset_6a97be88da3ea3.32901038.jpeg"
-              alt="Profil"
+              src={user?.avatar_url || "https://bewhy.id/wp-content/uploads/asset_6a97be88da3ea3.32901038.jpeg"}
+              alt={user?.name || "Profil"}
               className="w-32 h-32 md:w-48 md:h-48 rounded-full object-cover shadow-sm"
             />
           </div>
@@ -95,7 +126,7 @@ export default function ProfileSettings() {
               </h2>
             )}
           </div>
-          <p className="text-[#54656f] mt-1">jerukbalimu@email.com</p>
+          <p className="text-[#54656f] mt-1">{user?.email || "jerukbalimu@email.com"}</p>
         </div>
 
         {/* --- MOBILE MENUS (Cards) --- */}
@@ -103,12 +134,15 @@ export default function ProfileSettings() {
 
           {/* Kelompok 1: Pengaturan AI */}
           <div className="bg-white rounded-xl overflow-hidden shadow-sm border border-[#e9edef]">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#f0f2f5] active:bg-gray-50 cursor-pointer hover:bg-[#f5f6f6]">
+            <div 
+              onClick={() => setIsModelModalOpen(true)}
+              className="flex items-center justify-between px-4 py-3 border-b border-[#f0f2f5] active:bg-gray-50 cursor-pointer hover:bg-[#f5f6f6]"
+            >
               <div className="flex items-center gap-4">
                 <Bot size={22} className="text-[#54656f]" />
                 <div className="flex flex-col">
                   <span className="text-[15px] text-[#111b21]">Model AI Default</span>
-                  <span className="text-[12px] text-[#54656f]">Gemini, ChatGPT, Claude</span>
+                  <span className="text-[12px] text-[#54656f]">{defaultIncognitoModel}</span>
                 </div>
               </div>
               <ChevronRight size={20} className="text-[#8696a0]" />
@@ -126,7 +160,10 @@ export default function ProfileSettings() {
               </div>
               <ChevronRight size={20} className="text-[#8696a0]" />
             </div>
-            <div className="flex items-center justify-between px-4 py-3 active:bg-gray-50 cursor-pointer hover:bg-[#f5f6f6]">
+            <div 
+              onClick={handleMemoriesClick}
+              className="flex items-center justify-between px-4 py-3 active:bg-gray-50 cursor-pointer hover:bg-[#f5f6f6]"
+            >
               <div className="flex items-center gap-4">
                 <Wand2 size={22} className="text-[#54656f]" />
                 <div className="flex flex-col">
@@ -217,7 +254,7 @@ export default function ProfileSettings() {
               </div>
             </div>
             <div className="flex items-center justify-between px-4 py-3 active:bg-gray-50 cursor-pointer hover:bg-[#f5f6f6]">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 cursor-pointer" onClick={handleLogout}>
                 <LogOut size={22} className="text-red-500" />
                 <div className="flex flex-col">
                   <span className="text-[15px] text-red-500">Keluar</span>
@@ -234,11 +271,14 @@ export default function ProfileSettings() {
           <div className="px-6 py-4">
             <h3 className="text-[#008069] text-[13px] font-medium">PENGATURAN AI</h3>
           </div>
-          <div className="flex items-center gap-6 px-6 py-4 hover:bg-[#f5f6f6] cursor-pointer">
+          <div 
+            onClick={() => setIsModelModalOpen(true)}
+            className="flex items-center gap-6 px-6 py-4 hover:bg-[#f5f6f6] cursor-pointer"
+          >
             <Bot size={24} className="text-[#54656f]" />
             <div className="flex flex-col">
               <span className="text-[17px] text-[#111b21]">Model AI Default</span>
-              <span className="text-sm text-[#54656f]">Pilih model bahasa (Gemini, ChatGPT)</span>
+              <span className="text-sm text-[#54656f]">{defaultIncognitoModel}</span>
             </div>
           </div>
           <div 
@@ -251,7 +291,10 @@ export default function ProfileSettings() {
               <span className="text-sm text-[#54656f]">Atur kunci API kustom Anda</span>
             </div>
           </div>
-          <div className="flex items-center gap-6 px-6 py-4 hover:bg-[#f5f6f6] cursor-pointer">
+          <div 
+            onClick={handleMemoriesClick}
+            className="flex items-center gap-6 px-6 py-4 hover:bg-[#f5f6f6] cursor-pointer"
+          >
             <Wand2 size={24} className="text-[#54656f]" />
             <div className="flex flex-col">
               <span className="text-[17px] text-[#111b21]">Personalisasi & Prompt</span>
@@ -322,7 +365,7 @@ export default function ProfileSettings() {
               <span className="text-sm text-[#54656f]">Pusat bantuan, hubungi kami</span>
             </div>
           </div>
-          <div className="flex items-center gap-6 px-6 py-4 hover:bg-[#f5f6f6] cursor-pointer">
+          <div className="flex items-center gap-6 px-6 py-4 hover:bg-[#f5f6f6] cursor-pointer" onClick={handleLogout}>
             <LogOut size={24} className="text-red-500" />
             <div className="flex flex-col">
               <span className="text-[17px] text-red-500">Keluar</span>
@@ -332,6 +375,16 @@ export default function ProfileSettings() {
         </div>
 
       </div>
+
+      <ModelSearchModal
+        isOpen={isModelModalOpen}
+        onClose={() => setIsModelModalOpen(false)}
+        onSelect={(model) => {
+          updateDefaultIncognitoModel(model.slug || model.id);
+          setIsModelModalOpen(false);
+          if (showToast) showToast(`Model default diubah ke ${model.name}`);
+        }}
+      />
     </div>
   );
 }

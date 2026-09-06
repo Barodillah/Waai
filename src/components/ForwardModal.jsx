@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Search, Users, UserPlus, Zap, MessageSquare, Bot, CircleDashed } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 import { useNavigate } from 'react-router-dom';
+import { getModelAvatar } from '../utils/avatar';
 
 export default function ForwardModal() {
   const {
@@ -32,7 +33,7 @@ export default function ForwardModal() {
     const fetchModels = async () => {
       setIsLoadingModels(true);
       try {
-        const response = await fetch('https://openrouter.ai/api/frontend/v1/models/find?active=true&order=most-popular&output_modalities=text');
+        const response = await fetch('https://openrouter.ai/api/frontend/v1/models/find?active=true&order=most-popular&output_modalities=text&categories=roleplay');
         const data = await response.json();
         const models = data.data.models.slice(0, 20);
         setOpenRouterModels(models);
@@ -246,7 +247,7 @@ export default function ForwardModal() {
                   onClick={() => handleForwardToPersona({
                     id: model.slug || model.id,
                     name: model.name,
-                    avatar: iconUrl || `https://api.dicebear.com/9.x/micah/svg?seed=${encodeURIComponent(model.name)}`,
+                    avatar: iconUrl || getModelAvatar(model.name),
                     welcomeMessage: `Halo! Saya adalah ${model.name}. Ada yang bisa saya bantu?`
                   })}
                   className="px-4 py-3 flex items-center gap-3.5 hover:bg-[#f5f6f6] cursor-pointer"

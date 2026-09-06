@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom';
-import { MessageSquare, CircleDashed } from 'lucide-react';
+import { MessageSquare, PlusCircle } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import Toast from '../components/Toast';
 import { useChat } from '../context/ChatContext';
@@ -9,8 +9,13 @@ import ProfileFeatureView from '../components/ProfileFeatureView';
 import ApiKeyView from '../components/ApiKeyView';
 import NewPersonaView from '../components/NewPersonaView';
 import ForwardModal from '../components/ForwardModal';
+import ApiKeyModal from '../components/ApiKeyModal';
+import LimitModal from '../components/LimitModal';
+import MemoriesView from '../components/MemoriesView';
+import { useUser } from '../context/UserContext';
 
 export default function MainLayout() {
+  const { user } = useUser();
   const { toastMessage, activeSessionId, showContactInfo, showSearchInfo, sessions, activeMobileTab, setActiveMobileTab, activeProfileFeature } = useChat();
 
   return (
@@ -26,17 +31,22 @@ export default function MainLayout() {
               className={`relative w-12 h-8 flex items-center justify-center rounded-full transition-colors ${activeMobileTab === 'chats' ? 'bg-[#dcf8c6] text-[#008069]' : 'text-[#54656f] hover:bg-gray-200'}`}
             >
               <MessageSquare size={22} className={activeMobileTab === 'chats' ? 'fill-current' : ''} />
-              {sessions.length > 0 && (
-                <span className="absolute -top-1 right-0 bg-[#ea0038] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full z-10">
-                  {sessions.length}
-                </span>
-              )}
+              {(() => {
+                const totalUnread = sessions.reduce((acc, s) => acc + (s.unreadCount || 0), 0);
+                if (totalUnread === 0) return null;
+                return (
+                  <span className="absolute -top-1 right-0 bg-[#ea0038] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full z-10">
+                    {totalUnread > 99 ? '99+' : totalUnread}
+                  </span>
+                );
+              })()}
             </button>
             <button
-              onClick={() => setActiveMobileTab('status')}
-              className={`w-12 h-8 flex items-center justify-center rounded-full transition-colors ${activeMobileTab === 'status' ? 'bg-[#dcf8c6] text-[#008069]' : 'text-[#54656f] hover:bg-gray-200'}`}
+              onClick={() => setActiveMobileTab('new_chat')}
+              title="Pesan Baru"
+              className={`w-12 h-8 flex items-center justify-center rounded-full transition-colors ${activeMobileTab === 'new_chat' || activeMobileTab === 'status' ? 'bg-[#dcf8c6] text-[#008069]' : 'text-[#54656f] hover:bg-gray-200'}`}
             >
-              <CircleDashed size={24} strokeWidth={1.5} />
+              <PlusCircle size={24} strokeWidth={1.5} />
             </button>
           </div>
 
@@ -45,7 +55,7 @@ export default function MainLayout() {
               onClick={() => setActiveMobileTab('profile')}
               className={`w-12 h-8 flex items-center justify-center rounded-full transition-colors ${activeMobileTab === 'profile' ? 'bg-[#dcf8c6]' : 'hover:bg-gray-200'}`}
             >
-              <img src="https://bewhy.id/wp-content/uploads/asset_6a97be88da3ea3.32901038.jpeg" alt="Anda" className="w-6 h-6 rounded-full object-cover" />
+              <img src={user?.avatar_url || "https://bewhy.id/wp-content/uploads/asset_6a97be88da3ea3.32901038.jpeg"} alt={user?.name || "Anda"} className="w-6 h-6 rounded-full object-cover" />
             </button>
           </div>
         </div>
@@ -68,6 +78,8 @@ export default function MainLayout() {
             <div className="w-full h-full">
                {activeProfileFeature === 'apikey' ? (
                  <ApiKeyView isMobile={false} />
+               ) : activeProfileFeature === 'memories' ? (
+                 <MemoriesView isMobile={false} />
                ) : (
                  <ProfileFeatureView />
                )}
@@ -89,6 +101,8 @@ export default function MainLayout() {
       </div>
 
       <ForwardModal />
+      <ApiKeyModal />
+      <LimitModal />
     </div>
   );
 }

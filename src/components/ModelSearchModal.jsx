@@ -12,7 +12,7 @@ export default function ModelSearchModal({ isOpen, onClose, onSelect }) {
     const fetchModels = async () => {
       setIsLoadingModels(true);
       try {
-        const response = await fetch('https://openrouter.ai/api/frontend/v1/models/find?active=true&order=most-popular&output_modalities=text');
+        const response = await fetch('https://openrouter.ai/api/frontend/v1/models/find?active=true&order=most-popular&output_modalities=text&categories=roleplay');
         const data = await response.json();
         const models = data.data.models.slice(0, 20);
         setOpenRouterModels(models);
@@ -59,7 +59,7 @@ export default function ModelSearchModal({ isOpen, onClose, onSelect }) {
       <div className="bg-white w-full h-[100dvh] sm:h-auto sm:max-h-[90vh] sm:rounded-xl shadow-xl flex flex-col sm:max-w-[420px] overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-4 px-4 h-14 shrink-0 bg-[#f0f2f5] border-b border-[#e9edef]">
-          <button 
+          <button
             onClick={onClose}
             className="text-[#54656f] hover:text-[#111b21] p-1 rounded-full transition-colors"
           >
@@ -94,14 +94,14 @@ export default function ModelSearchModal({ isOpen, onClose, onSelect }) {
               {modelSearchQuery ? 'Hasil Pencarian' : 'Model Terpopuler'}
             </h3>
           </div>
-          
+
           {isLoadingModels ? (
             <div className="px-4 py-8 text-sm text-[#54656f] text-center flex flex-col items-center justify-center gap-2">
               <CircleDashed size={24} className="animate-spin text-[#00a884]" />
               Memuat model...
             </div>
           ) : openRouterModels.length > 0 ? (
-            openRouterModels.map((model) => {
+            openRouterModels.map((model, index) => {
               const modelName = model.name.toLowerCase();
               let iconUrl = null;
 
@@ -121,7 +121,7 @@ export default function ModelSearchModal({ isOpen, onClose, onSelect }) {
 
               return (
                 <div
-                  key={model.slug || model.id}
+                  key={`${model.slug || model.id}-${index}`}
                   onClick={() => onSelect(model, iconUrl)}
                   className="px-4 py-3 flex items-center gap-3.5 hover:bg-[#f5f6f6] cursor-pointer"
                 >

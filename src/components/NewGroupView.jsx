@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, Search, Check, Bot, ArrowRight, CircleDashed, X } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
+import { getModelAvatar } from '../utils/avatar';
 import ConfirmModal from './ConfirmModal';
 
 export default function NewGroupView() {
@@ -9,7 +10,7 @@ export default function NewGroupView() {
   const [groupName, setGroupName] = useState('');
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   const [openRouterModels, setOpenRouterModels] = useState([]);
   const [defaultModels, setDefaultModels] = useState([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
@@ -20,7 +21,7 @@ export default function NewGroupView() {
     const fetchModels = async () => {
       setIsLoadingModels(true);
       try {
-        const response = await fetch('https://openrouter.ai/api/frontend/v1/models/find?active=true&order=most-popular&output_modalities=text');
+        const response = await fetch('https://openrouter.ai/api/frontend/v1/models/find?active=true&order=most-popular&output_modalities=text&categories=roleplay');
         const data = await response.json();
         const models = data.data.models.slice(0, 20).map(m => ({
           id: m.slug,
@@ -80,10 +81,10 @@ export default function NewGroupView() {
 
   const filteredPersonas = searchQuery
     ? allPersonas.filter(
-        (p) =>
-          p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (p.description || '').toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      (p) =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.description || '').toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : allPersonas;
 
   const toggleMember = (member) => {
@@ -94,7 +95,7 @@ export default function NewGroupView() {
       let avatarUrl = member.avatar;
       if (!avatarUrl && member.id && member.id.includes('/')) {
         // Use robohash for models
-        avatarUrl = `https://robohash.org/${encodeURIComponent(member.id)}.png?set=set3`;
+        avatarUrl = getModelAvatar(member.id);
       }
       setSelectedMembers(prev => [...prev, { ...member, avatar: avatarUrl, _type: member._type || 'model' }]);
     }
@@ -143,17 +144,17 @@ export default function NewGroupView() {
               })}
             </div>
           )}
-          
+
           <div className="px-4 pb-3 pt-3">
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
-              placeholder="Nama grup" 
+              placeholder="Nama grup"
               className="w-full border-b-2 border-[#00a884] focus:border-[#00a884] bg-transparent outline-none py-2 text-sm text-[#111b21] placeholder-[#8696a0]"
             />
           </div>
-          
+
           {/* Search Input */}
           <div className="px-3 pb-3">
             <div className="flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm bg-[#f0f2f5] text-[#111b21]">
@@ -185,8 +186,8 @@ export default function NewGroupView() {
               {filteredPersonas.map(persona => {
                 const isSelected = selectedMembers.some(m => m.id === persona.id);
                 return (
-                  <div 
-                    key={persona.id} 
+                  <div
+                    key={persona.id}
                     onClick={() => toggleMember(persona)}
                     className="flex items-center px-4 py-2 hover:bg-[#f5f6f6] cursor-pointer"
                   >
@@ -212,7 +213,7 @@ export default function NewGroupView() {
           <div className="px-4 py-3 bg-white mt-2 border-t border-[#f0f2f5]">
             <h3 className="text-sm font-medium text-[#008069]">{searchQuery ? 'Hasil Pencarian Model' : 'Model Populer'}</h3>
           </div>
-          
+
           {isLoadingModels ? (
             <div className="px-4 py-3 text-sm text-[#54656f] text-center flex items-center justify-center gap-2">
               <CircleDashed size={18} className="animate-spin text-[#00a884]" />
@@ -239,8 +240,8 @@ export default function NewGroupView() {
               }
 
               return (
-                <div 
-                  key={`${model.id}-${idx}`} 
+                <div
+                  key={`${model.id}-${idx}`}
                   onClick={() => toggleMember(model)}
                   className="flex items-center px-4 py-3 hover:bg-[#f5f6f6] cursor-pointer"
                 >
@@ -271,7 +272,7 @@ export default function NewGroupView() {
 
       {/* FAB Submit Button */}
       {groupName.trim() !== '' && selectedMembers.length > 0 && (
-        <button 
+        <button
           onClick={() => setShowConfirmModal(true)}
           className="absolute bottom-6 right-6 w-14 h-14 bg-[#00a884] rounded-full flex items-center justify-center shadow-lg hover:bg-[#008f6f] transition-colors text-white z-20"
         >

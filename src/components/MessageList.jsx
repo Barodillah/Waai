@@ -1,14 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Lock, Copy, Check, CheckCheck, ChevronDown, Reply, Forward, Pin, Star, Trash2 } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
+import { useUser } from '../context/UserContext';
+import { formatTime, formatDateSeparator } from '../utils/time';
 import ReactMarkdown from 'react-markdown';
+import InfoMessage from './InfoMessage';
 import remarkGfm from 'remark-gfm';
+import { getDefaultAiAvatar } from '../utils/avatar';
 
 export default function MessageList({ activeSession }) {
-  const { showToast, customPersonas, setReplyingTo, setForwardMessage } = useChat();
+  const { showToast, customPersonas, setReplyingTo, setForwardMessage, startNewChat, setShowContactInfo, deleteMessage, scrollToMessageId, setScrollToMessageId, typingSessionId } = useChat();
+  const { user } = useUser();
   const messagesEndRef = useRef(null);
   const [copiedId, setCopiedId] = useState(null);
   const [openDropdownId, setOpenDropdownId] = useState(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
   const longPressTimer = useRef(null);
 
   const handleTouchStart = (msgId) => {
@@ -44,11 +50,31 @@ export default function MessageList({ activeSession }) {
 
   const persona = customPersonas?.find(p => p.id === activeSession.personaId);
   const modelId = persona ? (persona.baseModel || persona.id) : activeSession.personaId;
-  const isWaitingForAi = activeSession.messages.length > 0 && activeSession.messages[activeSession.messages.length - 1].sender === 'user';
+  const isWaitingForAi = typingSessionId === activeSession.id;
+
+  const isScrollingToMessage = useRef(false);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeSession.messages, isWaitingForAi]);
+    if (scrollToMessageId) {
+      isScrollingToMessage.current = true;
+      setTimeout(() => {
+        const el = document.getElementById(`msg-${scrollToMessageId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setHighlightedMessageId(scrollToMessageId);
+          setTimeout(() => {
+            setHighlightedMessageId(null);
+          }, 2000);
+        }
+        setScrollToMessageId(null);
+        setTimeout(() => {
+          isScrollingToMessage.current = false;
+        }, 500);
+      }, 100);
+    } else if (!isScrollingToMessage.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [activeSession.messages, isWaitingForAi, scrollToMessageId, setScrollToMessageId]);
 
   const handleCopyText = (text, id) => {
     navigator.clipboard?.writeText(text);
@@ -58,45 +84,58 @@ export default function MessageList({ activeSession }) {
   };
 
   return (
-    <div
-      className="flex-1 overflow-y-auto px-3 md:px-12 py-4 space-y-3 relative scrollbar-thin"
-      style={{
-        backgroundImage: `radial-gradient(circle at center, rgba(0, 0, 0, 0.035) 0%, transparent 70%)`
-      }}
-    >
+    <div className="flex-1 overflow-y-auto px-3 md:px-12 py-4 space-y-3 relative scrollbar-thin bg-[#efeae2] chat-bg">
       {/* Global Backdrop Blur (Mobile Only) */}
       {openDropdownId && (
         <div className="md:hidden fixed inset-0 z-40 bg-white/20 backdrop-blur-[2px] transition-all" />
       )}
 
-      <div className="flex justify-center my-2">
-        <div className="text-[11px] px-3 py-1.5 rounded-lg max-w-sm text-center shadow-xs flex items-center gap-1.5 bg-[#ffeecd] text-[#54656f] border border-[#ffdf9e]/50">
-          <Lock size={12} className="shrink-0 text-[#856404]" />
-          <span>Pesan diproses langsung oleh <strong>{modelId}</strong>.</span>
-        </div>
-      </div>
+      <InfoMessage 
+        text={<span>Pesan diproses langsung oleh <strong>{modelId}</strong>.</span>}
+        icon={<Lock size={12} className="text-[#856404]" />}
+        variant="warning"
+      />
 
-      {activeSession.messages.map((msg) => {
+      {activeSession.messages.map((msg, index) => {
+        let showDateSeparator = false;
+        let dateSeparatorText = '';
+        if (index === 0) {
+          showDateSeparator = true;
+          dateSeparatorText = formatDateSeparator(msg.time);
+        } else {
+          const prevMsg = activeSession.messages[index - 1];
+          const prevDate = new Date(prevMsg.time).toDateString();
+          const currDate = new Date(msg.time).toDateString();
+          if (prevDate !== currDate) {
+            showDateSeparator = true;
+            dateSeparatorText = formatDateSeparator(msg.time);
+          }
+        }
+
+        const dateSeparatorNode = (showDateSeparator && !activeSession.isIncognito) ? (
+          <InfoMessage key={`date-${msg.id}`} text={dateSeparatorText} />
+        ) : null;
+
         if (msg.sender === 'system') {
           return (
-            <div key={msg.id} className="flex justify-center my-2">
-              <div className="text-[12px] px-3 py-1.5 rounded-lg max-w-sm text-center shadow-sm bg-[#ffffff] text-[#54656f] border border-[#e9edef]">
-                {msg.text}
-              </div>
-            </div>
+            <React.Fragment key={msg.id}>
+              {dateSeparatorNode}
+              <InfoMessage text={msg.text} />
+            </React.Fragment>
           );
         }
 
         const isUser = msg.sender === 'user';
         return (
-          <div
-            id={`msg-${msg.id}`}
-            key={msg.id}
-            className={`flex w-full mb-1.5 ${isUser ? 'justify-end' : 'justify-start'} group ${openDropdownId === msg.id ? 'relative z-50' : ''}`}
-          >
+          <React.Fragment key={msg.id}>
+            {dateSeparatorNode}
+            <div
+              id={`msg-${msg.id}`}
+              className={`flex w-full mb-1.5 ${isUser ? 'justify-end' : 'justify-start'} group ${openDropdownId === msg.id ? 'relative z-50' : ''}`}
+            >
             {!isUser && activeSession.isGroup && (
                <div className="mr-2 shrink-0 self-start mt-0.5">
-                  <img src={msg.avatar || 'https://api.dicebear.com/9.x/bottts/svg?seed=ai'} alt={msg.senderName} className="w-[34px] h-[34px] rounded-full object-cover bg-[#f0f2f5]" />
+                  <img src={msg.avatar || getDefaultAiAvatar()} alt={msg.senderName} className="w-[34px] h-[34px] rounded-full object-cover bg-[#f0f2f5]" />
                </div>
             )}
             <div
@@ -104,10 +143,10 @@ export default function MessageList({ activeSession }) {
               onTouchEnd={handleTouchEnd}
               onTouchMove={handleTouchMove}
               onDoubleClick={() => setOpenDropdownId(msg.id)}
-              className={`relative max-w-[85%] md:max-w-[70%] lg:max-w-[60%] rounded-lg px-2.5 py-1.5 text-sm shadow-sm transition-all ${isUser
+              className={`relative max-w-[85%] md:max-w-[70%] lg:max-w-[60%] rounded-lg px-2.5 py-1.5 text-sm shadow-sm transition-all duration-500 ${isUser
                   ? 'bg-[#d9fdd3] text-[#111b21] rounded-tr-none'
                   : 'bg-[#ffffff] text-[#111b21] rounded-tl-none'
-                }`}
+                } ${highlightedMessageId === msg.id ? 'ring-2 ring-[#00a884] bg-opacity-80 scale-[1.02]' : ''}`}
             >
               {/* Removed tails based on user feedback */}
 
@@ -155,7 +194,14 @@ export default function MessageList({ activeSession }) {
                       <span>Sematkan</span>
                       <Pin size={20} className="text-[#111b21]" />
                     </button>
-                    <button className="w-full px-5 py-3 hover:bg-[#f5f6f6]/50 text-[#ea0038] text-[15px] flex items-center justify-between">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteMessage(activeSession.id, msg.id);
+                        setOpenDropdownId(null);
+                      }}
+                      className="w-full px-5 py-3 hover:bg-[#f5f6f6]/50 text-[#ea0038] text-[15px] flex items-center justify-between"
+                    >
                       <span>Hapus</span>
                       <Trash2 size={20} className="text-[#ea0038]" />
                     </button>
@@ -164,7 +210,19 @@ export default function MessageList({ activeSession }) {
 
               {!isUser && activeSession.isGroup && msg.senderName && (
                 <div className="mb-0.5 pr-8">
-                  <span className="font-medium text-[13px] text-[#e55030] leading-none">{msg.senderName}</span>
+                  <span 
+                    className="font-medium text-[13px] text-[#e55030] leading-none cursor-pointer hover:underline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const memberObj = activeSession.members?.find(m => m.id === msg.senderId);
+                      if (memberObj) {
+                        startNewChat(memberObj);
+                        setShowContactInfo(true);
+                      }
+                    }}
+                  >
+                    {msg.senderName}
+                  </span>
                 </div>
               )}
 
@@ -188,11 +246,21 @@ export default function MessageList({ activeSession }) {
               </div>
 
               <div className="flex items-center justify-end gap-1 text-[10px] text-[#667781] mt-1 float-right ml-2 -mb-0.5 select-none">
-                <span>{msg.time}</span>
-                {isUser && msg.status === 'read' && <CheckCheck size={14} className="text-[#53bdeb]" />}
+                <span>{formatTime(msg.time)}</span>
+                {(() => {
+                  if (!isUser) return null;
+                  
+                  const otherHumans = activeSession.members?.filter(m => m._type === 'user' && m.id !== user?.id).length || 0;
+                  const isRead = msg.reads?.length > 0 || otherHumans === 0;
+                  
+                  return isRead 
+                    ? <CheckCheck size={14} className="text-[#53bdeb]" /> 
+                    : <CheckCheck size={14} className="text-[#8696a0]" />;
+                })()}
               </div>
             </div>
           </div>
+          </React.Fragment>
         );
       })}
 
